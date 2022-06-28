@@ -19,6 +19,7 @@ shinyUI(
                  choiceNames = listeNombis,
                  choiceValues = listeNom
                ),
+               p("Capteur supplémentaire:"),
                fluidRow(
                column(6,
                       textInput("captIDsup", "Identifiant", value = "")),

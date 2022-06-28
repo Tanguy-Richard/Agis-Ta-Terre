@@ -900,19 +900,13 @@ shinyServer(function(session,input, output) {
       mmV <- max(donnee$VehG)
       if(mmV<100){
         absi <- seq(0,100,10)
-        absi_1 <- absi[absi<moyenne]
-        absi_2 <- absi[absi>moyenne]
       }else{
         if(mmV<500){
           absi <- seq(0,500,50)
-          absi_1 <- absi[absi<moyenne]
-          absi_2 <- absi[absi>moyenne]
           
         }else{
           maxi <- floor(mmV/100)*100
           absi <- seq(0,maxi,100)
-          absi_1 <- absi[absi<moyenne]
-          absi_2 <- absi[absi>moyenne]
           
         }
       }
@@ -922,7 +916,8 @@ shinyServer(function(session,input, output) {
         geom_smooth()+labs(x="Nombre de véhicules sur une tranche horaire", y = "Pourcentage de véhicule dépassant la vitesse données")+
         ggtitle("Evolution de la vitesse de conduite selon le nombre d'usagers")+
         geom_vline(xintercept=moyenne,color="red", size = 1.5)+
-        scale_x_continuous(breaks=c(absi_1,moyenne,absi_2), labels=c(absi_1,round(moyenne),absi_2))
+        scale_x_continuous(breaks=c(absi), labels=c(absi))+
+        geom_text(aes(x=moyenne, y=50,label=round(moyenne)),size=5,angle=-90, vjust=-0.5,color="red")
     })
   })
   
@@ -1065,7 +1060,7 @@ shinyServer(function(session,input, output) {
   
   # Coefficient de corrélation de Pearson pour le bruit
   
-  output$correlation <- renderText({
+  output$correlation <- renderUI({
     input$mise_a_j3 #Pour conditionner la mise à jour
     isolate({
       # Récupération des données traitées
@@ -1074,23 +1069,40 @@ shinyServer(function(session,input, output) {
       bruit_2 <- scale(Tableau$C2$bruit)# Normalisation du bruit pour le capteur 2
       correl <- round(cor(bruit_1,bruit_2,use = "na.or.complete"),3) # Coefficient de correlation de Pearson 
       
-      paste("Coefficient de correlation de Pearson :",correl) # Fabrication du texte pour l'affichage
+      ligne1 <- paste("Coefficient de correlation de Pearson :",correl) # Fabrication du texte pour l'affichage
+      if(correl>0.5){
+        ligne2 <- "C'est une valeur élevée, les deux courbes sont corrélées "
+      }
+      if(correl<=0.5){
+        ligne2 <- "C'est une valeur moyenne, les deux courbes sont légèrement corrélées "
+      }
+      if(correl<0.2){
+        ligne2 <- "C'est une valeur faibe, les deux courbes ne sont pas corrélées "
+      }
+      HTML(paste(ligne1,ligne2,sep="<br/>"))
     })
   })
   
   
   # Coefficient de synchronicité des pics pour le bruit
   
-  output$pics <- renderText({
+  output$pics <- renderUI({
     input$mise_a_j3 #Pour conditionner la mise à jour
     isolate({
       # Récupération des données traitées
       Tableau <- Compar_tabl2()
       bruit_1 <- na.trim(scale(Tableau$C1$bruit))# Normalisation du bruit pour le capteur 1
       bruit_2 <- na.trim(scale(Tableau$C2$bruit))# Normalisation du bruit pour le capteur 2
-      pic <- round(peaks(bruit_1,bruit_2)$obs,3) # Test de synchronicité des pics
-      
-      paste("Taux de synchronicité des pics :",pic) # Fabrication du texte pour l'affichage
+      # Test de synchronicité des pics (on récupère la pvalue calculé à partir de 100 tirage)
+      picVal <- peaks(bruit_1,bruit_2,nrands = 100)$pval 
+      pic <- round(peaks(bruit_1,bruit_2)$obs,3)
+      ligne1 <- paste("Taux de synchronicité des pics :",pic) # Fabrication du texte pour l'affichage
+      if(picVal<0.05){
+        ligne2 <- "Les pics des deux courbes sont atteints en même temps très souvent."
+      }else{
+        ligne2 <- "On ne peut pas dire que les pics des deux courbes sont souvent atteints en même temps."
+      }
+      HTML(paste(ligne1,ligne2,sep="<br/>"))
     })
   }) 
   
@@ -1339,7 +1351,7 @@ shinyServer(function(session,input, output) {
   # N'affiche rien si il n'y a pas assez de données
   output$OutBox6_bis = renderUI(
     if (mode(Compar_tabl())=="character"){return()
-    }else{textOutput("correlation")} #Sinon affiche le taux de correlation
+    }else{htmlOutput("correlation")} #Sinon affiche le taux de correlation
   )
   # N'affiche rien si l'import n'a pas été fait
   output$OutBox7 = renderUI(
@@ -1351,7 +1363,7 @@ shinyServer(function(session,input, output) {
   # N'affiche rien si il n'y a pas assez de données
   output$OutBox7_bis = renderUI(
     if (mode(Compar_tabl())=="character"){return()
-    }else{textOutput("pics")} #Sinon affiche le taux de synchronicité des pics
+    }else{htmlOutput("pics")} #Sinon affiche le taux de synchronicité des pics
   )
   
   #Permet d'afficher le bouton d'import si toutes les conditions sont bonnes
@@ -1365,8 +1377,6 @@ shinyServer(function(session,input, output) {
   
   
 })
-
-
 
 
 
