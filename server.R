@@ -866,10 +866,10 @@ shinyServer(function(session,input, output) {
       # Préparation du tableau pour le graphique
       Vitesse <- c(vitesse10,vitesse20,vitesse30,vitesse40)
       k=length(vehicule)
-      Leg <- c(rep("Plus de 10km/h",k),rep("Plus de 20km/h",k),rep("Plus de 30km/h",k),rep("Plus de 40km/h",k))
-      donnee <- tibble(VehG,Vitesse,Leg)
+      Legende <- c(rep("Plus de 10km/h",k),rep("Plus de 20km/h",k),rep("Plus de 30km/h",k),rep("Plus de 40km/h",k))
+      donnee <- tibble(VehG,Vitesse,Legende)
       # Récupération des courbes lissées à partir de la méthode smooth de R
-      p <- ggplot(donnee)+aes(x=VehG, y=Vitesse, color = Leg, group=Leg)+stat_smooth()
+      p <- ggplot(donnee)+aes(x=VehG, y=Vitesse, color = Legende, group=Legende)+stat_smooth()
       y <- ggplot_build(p)$data[[1]][,1:3]
       # Création du tableau pour stocké les données
       Donnee <- NULL 
@@ -911,13 +911,17 @@ shinyServer(function(session,input, output) {
         }
       }
       
+      # ordonnée de l'afichage de la valeur du seuil
+      miny <- min(vitesse40)
+      ordMoy <- (100+miny)/2
+      
       # Graphique du seuil
-      ggplot(donnee)+aes(x=VehG, y=Vitesse, color = Leg, group=Leg)+geom_line(color="black")+
+      ggplot(donnee)+aes(x=VehG, y=Vitesse, color = Legende, group=Legende)+geom_line(color="black")+
         geom_smooth()+labs(x="Nombre de véhicules sur une tranche horaire", y = "Pourcentage de véhicule dépassant la vitesse données")+
         ggtitle("Evolution de la vitesse de conduite selon le nombre d'usagers")+
         geom_vline(xintercept=moyenne,color="red", size = 1.5)+
         scale_x_continuous(breaks=c(absi), labels=c(absi))+
-        geom_text(aes(x=moyenne, y=50,label=round(moyenne)),size=5,angle=-90, vjust=-0.5,color="red")
+        geom_text(aes(x=moyenne, y=ordMoy,label=round(moyenne)),size=5,angle=-90, vjust=-0.5,color="red")
     })
   })
   
@@ -969,7 +973,7 @@ shinyServer(function(session,input, output) {
         # Graphique non normé
         g <- ggplot()+geom_line(aes(x=X,y=Y,col=Capteur))+labs(title = "Tendance",
                                                                x = "Date",
-                                                               y="")
+                                                               y="Variation en nombre de véhicules")
       }
       
       g
@@ -988,10 +992,20 @@ shinyServer(function(session,input, output) {
       # Reconstruction du nom des capteurs et du sens
       cap1 <- paste(input$capteur1,input$sens1,sep="_")
       cap2 <- paste(input$capteur2,input$sens2,sep="_")
+      # Vecteur des jours de la semaine
+      jours <- c("lundi","mardi","mercredi","jeudi","vendredi","samedi","dimanche")
+      # Récupération des valeurs par jour:
+      week1 <- NULL
+      week2 <- NULL
+      for(i in 1:7){
+        week1 <- c(week1,Tableau$C1$cycle[wday(Date)==i][1])
+        week2 <- c(week2,Tableau$C2$cycle[wday(Date)==i][1])
+      }
+      
       if(input$Norm1=="Oui"){# Construction du graphique pour le choix normé
-        cycle_1 <- scale(Tableau$C1$cycle) # Normalisation du cycle pour le capteur 1
-        cycle_2 <- scale(Tableau$C2$cycle) # Normalisation du cycle pour le capteur 2
-        X <- c(Date,Date)
+        cycle_1 <- scale(week1) # Normalisation du cycle pour le capteur 1
+        cycle_2 <- scale(week2) # Normalisation du cycle pour le capteur 2
+        X <- c(1:7,1:7)
         Y <- c(cycle_1,cycle_2)
         Capteur <- c(rep(cap1,length(cycle_1)),rep(cap2,length(cycle_1)))
         
@@ -1000,18 +1014,20 @@ shinyServer(function(session,input, output) {
                                                                y="")+
           theme(
             axis.text.y = element_blank(),
-            axis.ticks.y = element_blank())
+            axis.ticks.y = element_blank())+
+          scale_x_continuous(breaks = 1:7, label=jours)
       }
       if(input$Norm1=="Non"){ # Construction du graphique pour le choix non normé
-        cycle_1 <- Tableau$C1$cycle # Récupération du cycle de la courbe 1
-        cycle_2 <- Tableau$C2$cycle # Récupération du cycle de la courbe 2
-        X <- c(Date,Date)
+        cycle_1 <- week1 # Récupération du cycle de la courbe 1
+        cycle_2 <- week2 # Récupération du cycle de la courbe 2
+        X <- c(1:7,1:7)
         Y <- c(cycle_1,cycle_2)
         Capteur <- c(rep(cap1,length(cycle_1)),rep(cap2,length(cycle_1)))
         
         g <- ggplot()+geom_line(aes(x=X,y=Y,col=Capteur))+labs(title = "Cycle",
                                                                x = "Date",
-                                                               y="")
+                                                               y="Variation en nombre de véhicules")+
+          scale_x_continuous(breaks = 1:7,  label = jours)
       }
       g
     })
@@ -1052,7 +1068,7 @@ shinyServer(function(session,input, output) {
         Don <- bind_cols(X,Y,Capteur)
         g <- ggplot(Don)+geom_line(aes(x=X,y=Y,col=Capteur))+labs(title = "Bruit",
                                                                   x = "Date",
-                                                                  y ="")
+                                                                  y ="Variation en nombre de véhicules")
       }
       g
     })

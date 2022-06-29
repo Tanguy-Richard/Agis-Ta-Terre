@@ -19,7 +19,7 @@ shinyUI(
                  choiceNames = listeNombis,
                  choiceValues = listeNom
                ),
-               p("Capteur supplémentaire:"),
+               h5("Capteur supplémentaire:"),
                fluidRow(
                column(6,
                       textInput("captIDsup", "Identifiant", value = "")),
@@ -37,7 +37,7 @@ shinyUI(
                       tags$img(src="carte capteur apli.jpg",height=500)))
                       
                ),
-      tabPanel("Test par periode", 
+      tabPanel("Comparaison de periodes", 
                fluidRow(
                  column(3,wellPanel(
                    uiOutput("Box1"),
@@ -135,6 +135,15 @@ shinyUI(
                    actionButton("mise_a_j2", "Mettre à jour")
                  )), 
                  column(width = 9,
+                        h5("Précisions sur le graphique"),
+                        p("Le graphique suivant indique pour chaque courbe le pourcentage de conducteurs (véhicules légers
+                     et poids lourds) qui arrivent à dépasser la vitesse spécifier en fonction du nombre d'autres 
+                     conducteurs sur la route durant une même période horaire."),
+                        p("Un changement brusque dans les courbes peut indiquer une présence régulière d'embouteillage 
+                     lorsqu'on dépasse la valeur du changement. La barre rouge indique cette valeur."),
+                        br(),
+                        p("Attention : la barre apparait toujours, même pour les routes sans embouteillages. Le calcul conduisant
+                     au placement de la barre souffre de défaut, elle peut être mal placée."),
                         uiOutput("OutBox2")
                  )
                )
@@ -163,10 +172,13 @@ shinyUI(
                  column(width = 9,
                         tabsetPanel(
                           tabPanel("Tendance",
+                          h3("Comment évolue la circulation au long de la présence du capteur?"),
                           uiOutput("OutBox3")),
                           tabPanel("Cycle",
+                          h3("Quel est l'effet des jours de la semaines ?"),
                           uiOutput("OutBox4")),
                           tabPanel("Bruit",
+                          h3("Peut-on dire que les usagers ont le même comportement sur les deux segments de routes ?"),
                           uiOutput("OutBox5"),
                           uiOutput("OutBox6"),
                           uiOutput("OutBox7"))),
