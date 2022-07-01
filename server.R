@@ -611,8 +611,7 @@ shinyServer(function(session,input, output) {
     # Création du graphique faisant apparaitre les courbes des deux périodes
     l <- ggplot(Donnee)+aes(x = Heure, y=Nombre_usagers, group = Periode, color = Periode)+geom_line(aes(linetype=Periode),size=1.5)+
       labs(x="Heure", y = "Nombre moyen d'usagers")+
-      geom_line(aes(x = Heure, y = Born1,group = Periode , color = Periode, linetype=Periode ))+
-      geom_line(aes(x = Heure, y = Born2,group = Periode , color = Periode, linetype=Periode ))+
+      geom_ribbon(aes(ymin=Born1, ymax=Born2, fill = Periode), linetype = "blank",alpha = 1/4)+
       ggtitle(ord_txt())+scale_x_continuous(breaks=heure,limits = c(heure[1]-0.5,heure[k]+0.5))+
       expand_limits(y = 0)
     
@@ -711,8 +710,7 @@ shinyServer(function(session,input, output) {
     # Création du graphique faisant apparaitre les courbes des deux périodes
     l <- ggplot(Donnee)+aes(x = Heure, y=Nombre_usagers, group = Periode, color = Periode)+geom_line(aes(linetype=Periode),size=1.5)+
       labs(x="Heure", y = "Nombre moyen d'usagers")+
-      geom_line(aes(x = Heure, y = Born1,group = Periode , color = Periode, linetype=Periode ))+
-      geom_line(aes(x = Heure, y = Born2,group = Periode , color = Periode, linetype=Periode ))+
+      geom_ribbon(aes(ymin=Born1, ymax=Born2, fill = Periode), linetype = "blank",alpha = 1/4)+
       ggtitle(ord_txt())+scale_x_continuous(breaks=heure,limits = c(heure[1]-0.5,heure[k]+0.5))+
       expand_limits(y = 0)
     
@@ -1093,7 +1091,7 @@ shinyServer(function(session,input, output) {
         ligne2 <- "C'est une valeur moyenne, les deux courbes sont légèrement corrélées "
       }
       if(correl<0.2){
-        ligne2 <- "C'est une valeur faibe, les deux courbes ne sont pas corrélées "
+        ligne2 <- "C'est une valeur faible, les deux courbes ne sont pas corrélées "
       }
       HTML(paste(ligne1,ligne2,sep="<br/>"))
     })
@@ -1237,7 +1235,7 @@ shinyServer(function(session,input, output) {
   output$OutBox13 = renderUI(
     if (is.null(liste_capteur())|mode(tableau_P1())=="character"|mode(tableau_P2())=="character"|length(input$SM1)==0|length(input$SM2)==0){return()
     }else{
-      h2("Compapraison avec la première période")
+      h2("Comparaison avec la première période")
     }
   )
   
@@ -1245,7 +1243,7 @@ shinyServer(function(session,input, output) {
   output$OutBox14 = renderUI(
     if (is.null(liste_capteur())|mode(tableau_P1())=="character"|mode(tableau_P3())=="character"|length(input$SM1)==0|length(input$SM3)==0){return()
     }else{
-      h2("Compapraison avec la seconde période")
+      h2("Comparaison avec la seconde période")
     }
   )
   
