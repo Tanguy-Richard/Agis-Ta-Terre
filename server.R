@@ -650,7 +650,7 @@ shinyServer(function(session,input, output) {
         title = element_text(hjust = 0.5),
         axis.text.y = element_blank(),
         axis.ticks.y = element_blank())+
-      labs(title="Significativité d'une différence de comportement",
+      labs(title="Significativité d'une différence de comportement (*)",
            x="Heure",
            y="")
     
@@ -749,7 +749,7 @@ shinyServer(function(session,input, output) {
         title = element_text(hjust = 0.5),
         axis.text.y = element_blank(),
         axis.ticks.y = element_blank())+
-      labs(title="Significativité d'une différence de comportement",
+      labs(title="Significativité d'une différence de comportement (*)",
            x="Heure",
            y="")
     
@@ -1247,6 +1247,17 @@ shinyServer(function(session,input, output) {
     }
   )
   
+  # Affiche la remarque pour l'interprttaion des test si tout va bien.
+  output$OutBox15 = renderUI(
+    if (is.null(liste_capteur())|mode(tableau_P1())=="character"|mode(tableau_P3())=="character"|length(input$SM1)==0|length(input$SM3)==0){return()
+    }else{
+      HTML("(*) Remarques relatives à la significativité de la différence de comportement : <br/>
+      Pour chaque créneau horaire, la couleur indique s'il y a un comportement différent des usagers entre les deux périodes.
+      Si le résultat est <i>Significatif</i>, c'est qu'il y a très probablement un changement de comportement entre les deux périodes (pour l'heure concernée).
+      Si le résultat est <i>Entre deux</i>, alors il est possible qu'il y ait une différence.
+      Si le résultat est <i>Non-significatif</i>, on ne peut pas dire qu'il y ait une différence.")
+    }
+  )
   
 ################################################################################################################# 
   
