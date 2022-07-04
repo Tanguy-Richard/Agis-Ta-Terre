@@ -195,7 +195,7 @@ shinyUI(
           h3("Avertissement relatif aux catégories de mobilités :"),
           p("Les capteurs Telraam utilisés ont des difficultés à différencier les grosses voitures comme les SUV des poids lourds. Le nombre de poids lourds est donc sur-évalué et le nombre de voitures sous-évalué. Toutefois, le total voitures + camions est précis.
           De la même façon, il faut être prudent dans la différenciation entre vélos et piétons."),
-          h3("Explicitation des statistiques mis en place (nécessite des compétences en statistique :"),
+          h3("Explicitation des statistiques mis en place (nécessite des compétences en statistique) :"),
           h4("Comparaison de périodes :"),
           p("Méthode pour tracer les courbes :") ,
           p("Selon la sélection de l’utilisateur, on filtre les données pour ne garder que le trafic correspondant aux mobilités, capteur, direction et contraintes de dates sélectionnés. On réalise ensuite une moyenne pour chaque créneau horaire.
@@ -208,7 +208,9 @@ shinyUI(
           p("On commence par filtrer les données selon les sélections de l’utilisateur. On isole la partie correspondant au pourcentage de conducteur dépassant chaque vitesse. On range les données dans l’ordre croissant du nombre de véhicules (voitures + camions). On a pré-lissé les données à l’aide d’une moyenne glissante d’une amplitude de 50 pour dégager un début tendance (courbe noir du graphique). À partir de cette tendance, on a lissé nos données à l’aide de l’outil geom_smooth de R. Ces courbes de lissages sont les courbes colorées du graphique."),
           br(),
           p("Méthode pour trouver le seuil :"),
-          p("L’objectif est de déterminer un seuil de rupture dans la courbe de lissage. Pour cela, on utilise un test de Darling Erdös (dérivé du test de CUSUM). La fonction est implémentée dans le Package CPAT (Curtis Miller)."),
+          p("L’objectif est de déterminer un seuil de rupture dans la courbe de lissage. Pour cela, on utilise un test de Darling Erdös (dérivé du test de CUSUM). La fonction est implémentée dans le Package",
+            tags$a(href="https://github.com/ntguardian/CPAT","CPAT"), 
+            "(Curtis Miller)."),
           h4(" Comparaison de période :"),
           p("Séparation en tendance, cycle et bruit :"),
           p("Après un filtrage des données selon les choix de l’utilisateur, on détermine la période d’activité commune des deux capteurs sélectionnées. 
@@ -222,7 +224,9 @@ shinyUI(
           p("2. Pour un coefficient entre 0.2 et 0.5 on considère que la corrélation est légère."),
           p("3. Pour un coefficient inférieur à 0.2 on considère que les courbes sont non corrélées."),
           br(),
-          p('Le second indicateur est un indicateur de la proportion d’extremum commun entre les deux courbes. Pour cela, on utilise la fonction « peaks » du package « synchrony ». Cette fonction compte le nombre de fois où les deux séries atteignent un maximum en même temps, puis les minimums pour ramener cela à la proportion total de pics (déterminer en sommant le nombre de maxima de la série en comptant le plus à celui de minima).
+          p('Le second indicateur est un indicateur de la proportion d’extremum commun entre les deux courbes. Pour cela, on utilise la fonction « peaks » du package «', 
+            tags$a(href="https://github.com/tgouhier/synchrony","synchrony"),
+          '». Cette fonction compte le nombre de fois où les deux séries atteignent un maximum en même temps, puis les minimums pour ramener cela à la proportion total de pics (déterminer en sommant le nombre de maxima de la série en comptant le plus à celui de minima).
           Pour tester si ce nombre est important la fonction procède à une estimation via  une méthode de Monte Carlo, en mélangeant plusieurs fois les deux séries pour observer le nombre de pics communs dans chaque cas, et voir si ces valeurs sont éloignées ou non de la proportion initiale.
           Si on rejette l’hypothèse que la synchronicité des pics est du au hasard, on affiche "Les pics des deux courbes sont atteints en même temps très souvent.", sinon "On ne peut pas dire que les pics des deux courbes sont souvent atteints en même temps.".')
       )
