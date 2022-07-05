@@ -143,8 +143,9 @@ shinyUI(
                         p("Un changement brusque dans les courbes peut indiquer une présence régulière d'embouteillage 
                      lorsqu'on dépasse la valeur du changement. La barre rouge indique cette valeur."),
                         br(),
-                        p("Attention : la barre apparait toujours, même pour les routes sans embouteillages. Le calcul conduisant
-                     au placement de la barre souffre de défaut, elle peut être mal placée."),
+                        p("Avertissement :"),
+                        p("1. La barre apparait toujours, même pour les routes sans embouteillages."),
+                        p("2. Le calcul conduisant au placement de la barre n'est pas parfait: elle peut être mal placée."),
                         uiOutput("OutBox2")
                  )
                )
@@ -158,7 +159,11 @@ shinyUI(
                    uiOutput("Box3"),
                    selectInput("sens2", label = "Direction du capteur",  
                                choices = c("Toute"="Toute","B vers A"="Rgt","A vers B" ="Lft")),
-                   selectInput("heure", label = "Choix de l'heure", choices = 7:20,selected = 9),
+                   selectInput("heure", label = "Choix de l'heure", 
+                               choices = c("6h-7h"=7,"7h-8h"=8,"8h-9h"=9,"9h-10h"=10,"10h-11h"=11,"11h-12h"=12,
+                                           "12h-13h"=13,"13h-14h"=14,"14h-15h"=15,"15h-16h"=16,"16h-17h"=17,
+                                           "17h-18h"=18,"18h-19h"=19,"19h-20h"=20,"20h-21h"=21),
+                               selected = 9),
                    checkboxGroupInput(
                      "mobilite2",
                      "Choix du type de mobilité",

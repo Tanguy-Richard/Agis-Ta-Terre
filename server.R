@@ -19,10 +19,10 @@ shinyServer(function(session,input, output) {
     isolate({
       
     if(input$captIDsup!=""){
-      key = "UZiPH7KKBY1TS4wqAV8LHaXbN2FlBDlp7s5aXTcV"
+      
       idseg = input$captIDsup
       status <- GET(paste0("https://telraam-api.net/v1/segments/id/", idseg),
-                    add_headers("X-Api-Key" = "Yeah"))$status_code
+                    add_headers("X-Api-Key" = key))$status_code
       if(status==200){
         FALSE
       }else{
@@ -61,10 +61,11 @@ shinyServer(function(session,input, output) {
   
   donnee_import <- reactive({
     
-    listres <- list(geomet = NULL, donnee = NULL)
     
     input$go_import #Pour conditionner la mise à jour
     isolate({
+      
+    listres <- list(geomet = NULL, donnee = NULL)
     
     try({
       
@@ -80,9 +81,6 @@ shinyServer(function(session,input, output) {
       listeNom_temp <- listeNom
     }
     
-    # Clefs d'acces de l'API 
-    key = "UZiPH7KKBY1TS4wqAV8LHaXbN2FlBDlp7s5aXTcV"
-    key2= "5XtrVimmiF7JEbqXkgIHH8BQMwsnMU0R3sJ92Pa4"
     
     ### Fonction recup date (l'API ne permet de recupere les donnees que par laps de 3 mois)
     ### On segmente la période en bout de 3 mois pour importer par petits bouts
@@ -125,7 +123,7 @@ shinyServer(function(session,input, output) {
       #recuperation des donnees mesurees par le capteur
       for(i in 1:length(dates$debut)){
         #recuperation des donnees
-        resTraffic <- POST("https://telraam-api.net/v1/reports/traffic", add_headers("X-Api-Key" = key2)
+        resTraffic <- POST("https://telraam-api.net/v1/reports/traffic", add_headers("X-Api-Key" = key)
                            , body = paste0('{
     "level": "segments",
     "format": "per-hour",
@@ -1083,7 +1081,7 @@ shinyServer(function(session,input, output) {
       bruit_2 <- scale(Tableau$C2$bruit)# Normalisation du bruit pour le capteur 2
       correl <- round(cor(bruit_1,bruit_2,use = "na.or.complete"),3) # Coefficient de correlation de Pearson 
       
-      ligne1 <- paste("Coefficient de correlation de Pearson :",correl) # Fabrication du texte pour l'affichage
+      ligne1 <- paste("Coefficient de correlation :",correl) # Fabrication du texte pour l'affichage
       if(correl>0.5){
         ligne2 <- "C'est une valeur élevée, les deux courbes sont corrélées "
       }
