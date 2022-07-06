@@ -138,14 +138,14 @@ shinyUI(
                  column(width = 9,
                         h5("Précisions sur le graphique"),
                         p("Le graphique suivant indique pour chaque courbe le pourcentage de conducteurs (véhicules légers
-                     et poids lourds) qui arrivent à dépasser la vitesse spécifier en fonction du nombre d'autres 
+                     et poids lourds) qui arrivent à dépasser la vitesse spécifiée en fonction du nombre d'autres 
                      conducteurs sur la route durant une même période horaire."),
                         p("Un changement brusque dans les courbes peut indiquer une présence régulière d'embouteillage 
                      lorsqu'on dépasse la valeur du changement. La barre rouge indique cette valeur."),
                         br(),
                         p("Avertissement :"),
                         p("1. La barre apparait toujours, même pour les routes sans embouteillages."),
-                        p("2. Le calcul conduisant au placement de la barre n'est pas parfait: elle peut être mal placée."),
+                        p("2. Le calcul conduisant au placement de la barre n'est pas parfait : elle peut être mal placée."),
                         uiOutput("OutBox2")
                  )
                )
@@ -181,7 +181,7 @@ shinyUI(
                           h3("Comment évolue la circulation au long de la présence du capteur?"),
                           uiOutput("OutBox3")),
                           tabPanel("Cycle hebdomadaire",
-                          h3("Quel est l'effet des jours de la semaines ?"),
+                          h3("Quel est l'effet du jour de la semaines ?"),
                           uiOutput("OutBox4")),
                           tabPanel("Bruit",
                           h3("Peut-on dire que les usagers ont le même comportement sur les deux segments de routes ?"),
@@ -198,17 +198,30 @@ shinyUI(
                    uiOutput("Box5"),
                    dateRangeInput("daterange5", "Période",
                                   start  = "2021-01-01",
-                                  end    = Sys.Date(),
+                                  end    = Sys.Date()-days(1),
                                   min    = "2021-01-01",
-                                  max    = Sys.Date()),
-                 )),column(width = 9,
+                                  max    = Sys.Date()-days(1)),
+                 
+                 radioButtons(inputId = "Vacance4", label = "Vacances comprises :",
+                              choices = c("Oui","Non","Seulement les vacances"),selected = "Non"),
+                 radioButtons(inputId = "JF4", label = "Jours fériés compris :",
+                              choices = c("Oui","Non","Seulement les jours fériés"),selected = "Non"),
+                 checkboxGroupInput(
+                   "SM4",
+                   "Choix des jours",
+                   selected = 1:5,
+                   choiceNames = c("lundi","mardi","mercredi","jeudi","vendredi","samedi","dimanche"),
+                   choiceValues = 1:7,
+                   inline = TRUE
+                 ))),
+                 column(width = 9,
                            h3("Quelle est l'heure d'engorgement ?"),
                            uiOutput("OutBox16")
                  ))
       ), 
-      tabPanel("Avertissement et trivia",
+      tabPanel("Méthodes et avertissements",
           h3("Avertissement relatif à la qualité des données :"),
-          p("Les données des capteurs Telraam ne sont pas issues d’une mesure continue sur une heure. Pour améliorer la qualité des données futures, les capteurs dédient une partie de leur temps d’activité à l’apprentissage. Les données totales sont reconstituées à partir du temps de mesures. Plus cette période de mesure est longue plus la qualité des données est grande. Telraam donne un outil de mesure de ce temps de mesure : l’uptime. Dans cette application, nous avons conservé que les données d’uptime supérieur à 0.5 (seuil conseillé par Telraam). Toutefois, les capteurs placés récemment (en période d’apprentissage) et les données matinales ou dans la soirée (visibilité réduite à cause de la nuit)  peuvent présenter des uptimes plus faible. 
+          p("Les données des capteurs Telraam ne sont pas issues d’une mesure continue sur une heure. Pour améliorer la qualité des données futures, les capteurs dédient une partie de leur temps d’activité à l’apprentissage. Les données totales sont reconstituées à partir du temps de mesures. Plus cette période de mesure est longue plus la qualité des données est grande. Telraam donne un outil de mesure de ce temps de mesure : l’uptime. Dans cette application, nous n'avons conservé que les données d’uptime supérieur à 0.5 (seuil conseillé par Telraam). Toutefois, les capteurs placés récemment (en période d’apprentissage) et les données matinales ou dans la soirée (visibilité réduite à cause de la nuit)  peuvent présenter des uptimes plus faible. 
           De plus la suppression des données à l’uptime trop faible fait qu’on possède moins de données pour les périodes à risque. La qualité des estimations et des tests est moins bonne sur ces périodes.
           Il faut donc être prudent en interprétant ces données."),
           h3("Avertissement relatif aux catégories de mobilités :"),
@@ -243,9 +256,9 @@ shinyUI(
           p("2. Pour un coefficient entre 0.2 et 0.5 on considère que la corrélation est légère."),
           p("3. Pour un coefficient inférieur à 0.2 on considère que les courbes sont non corrélées."),
           br(),
-          p('Le second indicateur est un indicateur de la proportion d’extremum commun entre les deux courbes. Pour cela, on utilise la fonction « peaks » du package «', 
+          p('Le second indicateur est un indicateur de la proportion d’extremums communs entre les deux courbes. Pour cela, on utilise la fonction « peaks » du package «', 
             tags$a(href="https://github.com/tgouhier/synchrony","synchrony"),
-          '». Cette fonction compte le nombre de fois où les deux séries atteignent un maximum en même temps, puis les minimums pour ramener cela à la proportion total de pics (déterminer en sommant le nombre de maxima de la série en comptant le plus à celui de minima).
+          '». Cette fonction compte le nombre de fois où les deux séries atteignent un maximum en même temps, puis les minimums pour ramener cela à la proportion totale de pics (déterminée en sommant le nombre de maximums de la série en comptant le plus à celui de minimums).
           Pour tester si ce nombre est important la fonction procède à une estimation via  une méthode de Monte Carlo, en mélangeant plusieurs fois les deux séries pour observer le nombre de pics communs dans chaque cas, et voir si ces valeurs sont éloignées ou non de la proportion initiale.
           Si on rejette l’hypothèse que la synchronicité des pics est du au hasard, on affiche "Les pics des deux courbes sont atteints en même temps très souvent.", sinon "On ne peut pas dire que les pics des deux courbes sont souvent atteints en même temps.".')
       )
