@@ -499,7 +499,8 @@ shinyServer(function(session,input, output) {
       totA <- tabjoin[,paste(input$mobilite2,S1,1,sep = "")]
       totB <- tabjoin[,paste(input$mobilite2,S2,2,sep = "")]
     } # Vérification sur le nombre de données sélectionnée (il y en a-t-il assez pour des analyses pertinente)
-    if(length(tabjoin$date)<28){
+    if(length(tabjoin$date)<
+       28){
       "Période commune des deux capteurs trop courte"
     }else{ # Préparation des données pour la suite : tableau et non de colonnes
       res <- bind_cols(tabjoin$date,totA,totB)
@@ -542,6 +543,120 @@ shinyServer(function(session,input, output) {
     tableau
     })
   })
+  
+  
+  
+  
+  
+  
+  
+################################################################################################################# 
+  
+#######  
+  
+# Onglet Heure d'engorgement
+  
+#######
+  
+  
+  # Définition du Graphique (character si vide)
+  
+  plot_eng_react <- reactive({
+    
+    #Séléction du capteur sélectionnée
+    don_1=subset(donnee_import()$donnee, segment_id==input$capteur4)
+    
+    #Séléction de la période
+    date <- input$daterange5
+    
+    periode <- interval(ymd(date[1]),ymd(date[2]))
+    don_1=Selection_Date(don_1,periode)$data1
+    
+    if(length(don_1$date)==0){  # Test pour savoir si la sélection est vide
+      "Pas de données pour la selection de la période"
+    }else{
+      if(input$Vacance4=="Non"){
+        don_1 <- Selection_Date(don_1,Vacances$interval)$data2
+      }
+      if(input$Vacance4=="Seulement les vacances"){
+        don_1 <- Selection_Date(don_1,Vacances$interval)$data1
+      }
+      if(length(don_1$date)==0){  # Test pour savoir si la sélection est vide
+        don_1 <- "Pas de données pour la selection de la période"
+      }else{ # Sélection de jours fériés
+        if(input$JF4=="Non"){
+          don_1 <- Selection_Date2(don_1,JoursFeries)$data2
+        }
+        if(input$JF4=="Seulement les jours fériés"){
+          don_1 <- Selection_Date2(don_1,JoursFeries)$data1
+        }
+        if(length(don_1$date)==0){  # Test pour savoir si la sélection est vide
+          "Pas de données pour la selection de la période"
+        }else{
+    # Séléction des jours de la semaine
+    jours <- input$SM4
+    # Calcul des moyenne par créneau horaire
+    v=don_1%>%filter(wday(date) %in% jours)%>% group_by(hour(date)) %>% summarise(n=mean(v85,na.rm=TRUE))
+    colnames(v)=c("Heure", "Vitesse")
+    bu_rgt=don_1%>%filter(wday(date) %in% jours)%>% group_by(hour(date)) %>% summarise(n_rgt=mean(car_rgt+heavy_rgt,na.rm=TRUE))
+    colnames(bu_rgt)=c("Heure", "Voiture_rgt")
+    bu_lft=don_1%>%filter(wday(date) %in% jours)%>% group_by(hour(date)) %>% summarise(n_lft=mean(car_lft+heavy_lft,na.rm=TRUE))
+    colnames(bu_lft)=c("Heure", "Voiture_lft")
+    # Tableau final pour le graphique
+    bu = full_join(bu_lft, bu_rgt, by = "Heure")
+    bu = full_join(bu, v, by = "Heure")
+    
+    if(length(bu$Heure)==0){ # Test pour savoir si la sélection est vide
+      "Pas de données pour la selection de la période"
+    }else{
+      # Création du graphique
+      # Placement des courbes des véhicules
+      fig <- plot_ly(bu, x = ~Heure)
+      fig <- fig %>% add_trace(y= ~Voiture_rgt, mode = "lines+markers", name = "B vers A", 
+                               line=list(color="blue", dash = "dot"),
+                               marker=list(color="blue"))
+      fig <- fig %>% add_trace(y= ~Voiture_lft, mode = "lines+markers", name = "A vers B", 
+                               line=list(color="blue", dash = "dash"),
+                               marker=list(color="blue"))
+      # Création du second axe des ordonnées
+      ay <- list(
+        tickfont = list(color = "red"),
+        overlaying = "y",
+        side = "right",
+        title = "Vitesse v85 moyenne (km/h)")
+      # Placement de la courbe de vitesse
+      fig <- fig %>% add_trace(y= ~Vitesse,  yaxis = "y2", mode = "lines+markers", name = "Vitesse v85 moyenne", 
+                               line=list(color="red"),
+                               marker=list(color="red"))
+      # Mise en place du titre et des axes
+      fig <- fig %>% layout(
+        title = "", yaxis2 = ay,
+        xaxis = list(title="Heure"),
+        yaxis = list(title="Nombre de véhicules moyen")
+      )%>%
+        layout(plot_bgcolor='#e5ecf6',
+               xaxis = list(
+                 zerolinecolor = '#ffff',
+                 zerolinewidth = 2,
+                 gridcolor = 'ffff',
+                 dtick=1),
+               yaxis = list(
+                 tickfont= list(color="blue"),
+                 zerolinecolor = '#ffff',
+                 zerolinewidth = 2,
+                 gridcolor = 'ffff')
+        )
+      
+      fig
+      
+    }    
+    
+    }
+    
+      }
+    }
+  })   
+  
   
 ##########################################################################################################################
 #
@@ -1138,66 +1253,9 @@ shinyServer(function(session,input, output) {
   # Graphique 
   
   output$plot_heure_eng <- renderPlotly({
-    don_1=subset(donnee_import()$donnee, segment_id==input$capteur4)
-    don_1=Selection_Date(don_1,Vacances$interval)$data2
-    date <- input$daterange5
     
-    periode <- interval(ymd(date[1]),ymd(date[2]))
-    don_1=Selection_Date(don_1,periode)$data1
+    plot_eng_react()
     
-    v=don_1%>%filter(wday(date) %in% 1:5)%>% group_by(hour(date)) %>% summarise(n=mean(v85,na.rm=TRUE))
-    colnames(v)=c("Heure", "Vitesse")
-    bu_rgt=don_1%>%filter(wday(date) %in% 1:5)%>% group_by(hour(date)) %>% summarise(n_rgt=mean(car_rgt,na.rm=TRUE))
-    colnames(bu_rgt)=c("Heure", "Voiture_rgt")
-    bu_lft=don_1%>%filter(wday(date) %in% 1:5)%>% group_by(hour(date)) %>% summarise(n_lft=mean(car_lft,na.rm=TRUE))
-    colnames(bu_lft)=c("Heure", "Voiture_lft")
-    
-    bu = full_join(bu_lft, bu_rgt, by = "Heure")
-    bu = full_join(bu, v, by = "Heure")
-    
-    
-    fig <- plot_ly(bu, x = ~Heure)
-    
-    fig <- fig %>% add_trace(y= ~Voiture_rgt, mode = "lines+markers", name = "B vers A", 
-                             line=list(color="blue", dash = "dot"),
-                             marker=list(color="blue"))
-  
-    fig <- fig %>% add_trace(y= ~Voiture_lft, mode = "lines+markers", name = "A vers B", 
-                             line=list(color="blue", dash = "dash"),
-                             marker=list(color="blue"))
-    
-    
-    ay <- list(
-      tickfont = list(color = "red"),
-      overlaying = "y",
-      side = "right",
-      title = "Vitesse v85 moyenne (km/h)")
-    
-    fig <- fig %>% add_trace(y= ~Vitesse,  yaxis = "y2", mode = "lines+markers", name = "Vitesse v85 moyenne", 
-                             line=list(color="red"),
-                             marker=list(color="red"))
-    
-    
-    
-    # Set figure title, x and y-axes titles
-    fig <- fig %>% layout(
-      title = "", yaxis2 = ay,
-      xaxis = list(title="Heure"),
-      yaxis = list(title="Nombre de voitures moyen")
-    )%>%
-      layout(plot_bgcolor='#e5ecf6',
-             xaxis = list(
-               zerolinecolor = '#ffff',
-               zerolinewidth = 2,
-               gridcolor = 'ffff'),
-             yaxis = list(
-               tickfont= list(color="blue"),
-               zerolinecolor = '#ffff',
-               zerolinewidth = 2,
-               gridcolor = 'ffff')
-      )
-    
-    fig
   }) 
   
   
@@ -1495,9 +1553,14 @@ shinyServer(function(session,input, output) {
   output$OutBox16 = renderUI(
     if (is.null(donnee_import()$donnee)){return("Import necessaire")
     }else{
-      plotlyOutput("plot_heure_eng")
+      uiOutput("OutBox16_bis")
     }
-  )  
+  )
+  
+  output$OutBox16_bis = renderUI(
+    if (mode(plot_eng_react())=="character"){return(plot_eng_react())
+    }else{plotlyOutput("plot_heure_eng")}
+  )
   
   
   
