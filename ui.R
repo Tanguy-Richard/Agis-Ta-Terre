@@ -58,7 +58,7 @@ shinyUI(
                                   end    = Sys.Date()-days(1),
                                   min    = "2021-01-01",
                                   max    = Sys.Date()-days(1)),
-                   radioButtons(inputId = "Vacance1", label = "Vancances comprises :",
+                   radioButtons(inputId = "Vacance1", label = "Vacances comprises :",
                                 choices = c("Oui","Non","Seulement les vacances"),selected = "Oui"),
                    radioButtons(inputId = "JF1", label = "Jours fériés compris :",
                                 choices = c("Oui","Non","Seulement les jours fériés"),selected = "Oui"),
@@ -76,7 +76,7 @@ shinyUI(
                                   end    = Sys.Date()-days(1),
                                   min    = "2021-01-01",
                                   max    = Sys.Date()-days(1)),
-                   radioButtons(inputId = "Vacance2", label = "Vancances comprises :",
+                   radioButtons(inputId = "Vacance2", label = "Vacances comprises :",
                                 choices = c("Oui","Non","Seulement les vacances"),selected = "Oui"),
                    radioButtons(inputId = "JF2", label = "Jours fériés compris :",
                                 choices = c("Oui","Non","Seulement les jours fériés"),selected = "Oui"),
@@ -94,7 +94,7 @@ shinyUI(
                                   end    = Sys.Date()-days(1),
                                   min    = "2021-01-01",
                                   max    = Sys.Date()-days(1)),
-                   radioButtons(inputId = "Vacance3", label = "Vancances comprises :",
+                   radioButtons(inputId = "Vacance3", label = "Vacances comprises :",
                                 choices = c("Oui","Non","Seulement les vacances"),selected = "Oui"),
                    radioButtons(inputId = "JF3", label = "Jours fériés compris :",
                                 choices = c("Oui","Non","Seulement les jours fériés"),selected = "Oui"),
@@ -192,6 +192,20 @@ shinyUI(
                  )
                )
       ),
+      tabPanel("Heure d'engorgement",
+               fluidRow(
+                 column(3,wellPanel(
+                   uiOutput("Box5"),
+                   dateRangeInput("daterange5", "Période",
+                                  start  = "2021-01-01",
+                                  end    = Sys.Date(),
+                                  min    = "2021-01-01",
+                                  max    = Sys.Date()),
+                 )),column(width = 9,
+                           h3("Quelle est l'heure d'engorgement ?"),
+                           uiOutput("OutBox16")
+                 ))
+      ), 
       tabPanel("Avertissement et trivia",
           h3("Avertissement relatif à la qualité des données :"),
           p("Les données des capteurs Telraam ne sont pas issues d’une mesure continue sur une heure. Pour améliorer la qualité des données futures, les capteurs dédient une partie de leur temps d’activité à l’apprentissage. Les données totales sont reconstituées à partir du temps de mesures. Plus cette période de mesure est longue plus la qualité des données est grande. Telraam donne un outil de mesure de ce temps de mesure : l’uptime. Dans cette application, nous avons conservé que les données d’uptime supérieur à 0.5 (seuil conseillé par Telraam). Toutefois, les capteurs placés récemment (en période d’apprentissage) et les données matinales ou dans la soirée (visibilité réduite à cause de la nuit)  peuvent présenter des uptimes plus faible. 

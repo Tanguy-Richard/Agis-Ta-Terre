@@ -1126,6 +1126,82 @@ shinyServer(function(session,input, output) {
     }
   )
   
+################################################################################################################# 
+  
+#######  
+  
+# Onglet Heure d'engorgement
+  
+#######
+  
+  
+  # Graphique 
+  
+  output$plot_heure_eng <- renderPlotly({
+    don_1=subset(donnee_import()$donnee, segment_id==input$capteur4)
+    don_1=Selection_Date(don_1,Vacances$interval)$data2
+    date <- input$daterange5
+    
+    periode <- interval(ymd(date[1]),ymd(date[2]))
+    don_1=Selection_Date(don_1,periode)$data1
+    
+    v=don_1%>%filter(wday(date) %in% 1:5)%>% group_by(hour(date)) %>% summarise(n=mean(v85,na.rm=TRUE))
+    colnames(v)=c("Heure", "Vitesse")
+    bu_rgt=don_1%>%filter(wday(date) %in% 1:5)%>% group_by(hour(date)) %>% summarise(n_rgt=mean(car_rgt,na.rm=TRUE))
+    colnames(bu_rgt)=c("Heure", "Voiture_rgt")
+    bu_lft=don_1%>%filter(wday(date) %in% 1:5)%>% group_by(hour(date)) %>% summarise(n_lft=mean(car_lft,na.rm=TRUE))
+    colnames(bu_lft)=c("Heure", "Voiture_lft")
+    
+    bu = full_join(bu_lft, bu_rgt, by = "Heure")
+    bu = full_join(bu, v, by = "Heure")
+    
+    
+    fig <- plot_ly(bu, x = ~Heure)
+    
+    fig <- fig %>% add_trace(y= ~Voiture_rgt, mode = "lines+markers", name = "B vers A", 
+                             line=list(color="blue", dash = "dot"),
+                             marker=list(color="blue"))
+  
+    fig <- fig %>% add_trace(y= ~Voiture_lft, mode = "lines+markers", name = "A vers B", 
+                             line=list(color="blue", dash = "dash"),
+                             marker=list(color="blue"))
+    
+    
+    ay <- list(
+      tickfont = list(color = "red"),
+      overlaying = "y",
+      side = "right",
+      title = "Vitesse v85 moyenne (km/h)")
+    
+    fig <- fig %>% add_trace(y= ~Vitesse,  yaxis = "y2", mode = "lines+markers", name = "Vitesse v85 moyenne", 
+                             line=list(color="red"),
+                             marker=list(color="red"))
+    
+    
+    
+    # Set figure title, x and y-axes titles
+    fig <- fig %>% layout(
+      title = "", yaxis2 = ay,
+      xaxis = list(title="Heure"),
+      yaxis = list(title="Nombre de voitures moyen")
+    )%>%
+      layout(plot_bgcolor='#e5ecf6',
+             xaxis = list(
+               zerolinecolor = '#ffff',
+               zerolinewidth = 2,
+               gridcolor = 'ffff'),
+             yaxis = list(
+               tickfont= list(color="blue"),
+               zerolinecolor = '#ffff',
+               zerolinewidth = 2,
+               gridcolor = 'ffff')
+      )
+    
+    fig
+  }) 
+  
+  
+  
   
   
 ##########################################################################################################################
@@ -1397,6 +1473,34 @@ shinyServer(function(session,input, output) {
         }else{downloadButton("downloadData2", "Import des données")}
     }
   )
+  
+################################################################################################################# 
+  
+#######  
+  
+# Onglet Heure d'engorgement
+  
+#######  
+  
+  # Permet de faire apparaitre la liste de capteur parmis lesquelles l'utilisateur peut choisir après l'import
+  output$Box5 = renderUI(
+    if (is.null(input$Capteurs)){return()
+    }else selectInput( "capteur4", 
+                       label = "Choix du capteur", 
+                       choices = input$Capteurs,
+                       selected = input$Capteurs[1])
+  )
+  
+  # Permet de demander l'import s'il na pas été fait, affiche le graphique si l'import est bon
+  output$OutBox16 = renderUI(
+    if (is.null(donnee_import()$donnee)){return("Import necessaire")
+    }else{
+      plotlyOutput("plot_heure_eng")
+    }
+  )  
+  
+  
+  
   
   
 })

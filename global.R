@@ -17,6 +17,7 @@ library(CPAT) # test de Darling Erdos
 library(synchrony) # fonction peaks (synchronicité des pics)
 library(forecast) # fonction ma : moving average
 library(zoo) # fonction na.trim
+library(plotly) # Pour le graphique des heures d'engorgement
 
 ########
 # Parametrage des package
@@ -158,6 +159,15 @@ Selection_Date=function(Donnees,Liste_interval){
 ########################
 
 
+#' Title
+#'
+#' @param Donnees 
+#' @param Liste_date 
+#'
+#' @return
+#' @export
+#'
+#' @examples
 Selection_Date2=function(Donnees,Liste_date){
   Valeurs_Bool = unlist(lapply(Donnees$date, FUN = function(x){
     date(x) %in% Liste_date}))
