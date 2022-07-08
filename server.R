@@ -449,6 +449,145 @@ shinyServer(function(session,input, output) {
   })
   
   
+  plot_seuil_prep <- reactive({
+    input$mise_a_j2 #Pour conditionner la mise à jour
+    isolate({
+      # Récupération du sens sélectionné
+      orientation = input$sens3
+      # Récupération du tableau pré filtré 
+      tableau_temp <- Tabl_Engor()
+      
+      # Création des vecteurs pour stocker les différentes courbes de vitesse
+      Vit_moins10=NULL
+      Vit_moins20=NULL
+      Vit_moins30=NULL
+      Vit_moins40=NULL
+      for(i in tableau_temp$car_speed_hist_0to70plus){ # On parcours les répartitions de vitesse
+        vitesse <- unlist(i)
+        # Somme progressive sur les parts d'usagers selon la vitesse
+        vitesse10 <- vitesse[1]
+        vitesse20 <- sum(vitesse[1:2])
+        vitesse30 <- sum(vitesse[1:3])
+        vitesse40 <- sum(vitesse[1:4])
+        # Rajout des parts calculés aux vecteurs
+        Vit_moins10 <- c(Vit_moins10,vitesse10)
+        Vit_moins20 <- c(Vit_moins20,vitesse20)
+        Vit_moins30 <- c(Vit_moins30,vitesse30)
+        Vit_moins40 <- c(Vit_moins40,vitesse40)
+      }
+      tableau_temp$vit_moins10 <- Vit_moins10
+      tableau_temp$vit_moins20 <- Vit_moins20
+      tableau_temp$vit_moins30 <- Vit_moins30
+      tableau_temp$vit_moins40 <- Vit_moins40
+      
+      # Création du tableau selon la direction choisie
+      if(orientation=="Toute"){
+        tableau_temp <- tableau_temp[,c("car","heavy","vit_moins10","vit_moins20","vit_moins30","vit_moins40")]
+        tableau_temp <- tableau_temp %>% mutate(vehic = car + heavy)
+        tableau_temp <- tableau_temp %>% arrange(vehic)
+      }
+      if(orientation=="Rgt"){
+        tableau_temp <- tableau_temp[,c("car_rgt","heavy_rgt","vit_moins10","vit_moins20","vit_moins30","vit_moins40")]
+        tableau_temp <- tableau_temp %>% mutate(vehic = car_rgt + heavy_rgt)
+        tableau_temp <- tableau_temp %>% arrange(vehic)
+      }
+      if(orientation=="Lft"){
+        tableau_temp <- tableau_temp[,c("car_lft","heavy_lft","vit_moins10","vit_moins20","vit_moins30","vit_moins40")]
+        tableau_temp <- tableau_temp %>% mutate(vehic = car_lft + heavy_lft)
+        tableau_temp <- tableau_temp %>% arrange(vehic)
+      }
+      # Calcul de moyenne glissante sur les parts
+      vitesse10 <- embed(tableau_temp$vit_moins10,50)
+      vitesse10 <- apply(vitesse10,1,mean)
+      vitesse10 <- 100-vitesse10
+      vitesse20 <- embed(tableau_temp$vit_moins20,50)
+      vitesse20 <- apply(vitesse20,1,mean)
+      vitesse20 <- 100-vitesse20
+      vitesse30 <- embed(tableau_temp$vit_moins30,50)
+      vitesse30 <- apply(vitesse30,1,mean)
+      vitesse30 <- 100-vitesse30
+      vitesse40 <- embed(tableau_temp$vit_moins40,50)
+      vitesse40 <- apply(vitesse40,1,mean)
+      vitesse40 <- 100-vitesse40
+      # Réalisation des abcisses
+      vehicule <- embed(tableau_temp$vehic,50)
+      vehicule <- apply(vehicule,1,mean)
+      VehG <- rep(vehicule,4)
+      # Préparation du tableau pour le graphique
+      Vitesse <- c(vitesse10,vitesse20,vitesse30,vitesse40)
+      #Cr&ation du tableau pour l'import
+      TablRes <- as.data.frame(cbind(vehicule,vitesse10,vitesse20,vitesse30,vitesse40))
+      colnames(TablRes) <- c("Nombre de vehicules","plus de 40km/h","plus de 30km/h","plus de 20km/h","plus de 10km/h")
+      k=length(vehicule)
+      Legende <- c(rep("Plus de 10km/h",k),rep("Plus de 20km/h",k),rep("Plus de 30km/h",k),rep("Plus de 40km/h",k))
+      donnee <- tibble(VehG,Vitesse,Legende)
+      # Récupération des courbes lissées à partir de la méthode smooth de R
+      p <- ggplot(donnee)+aes(x=VehG, y=Vitesse, color = Legende, group=Legende)+stat_smooth()
+      y <- ggplot_build(p)$data[[1]][,1:3]
+      # Création du tableau pour stocké les données
+      Donnee <- NULL 
+      for(i in levels(as.factor(y$colour))){
+        Donnee <- bind_cols(Donnee,y[y$colour==i,-1])
+      }
+      X=Donnee[,1]
+      Y=Donnee[,c(2,4,6,8)]
+      Y <- t(t(Y)[order(t(Y)[,1]),]) # Rangement des colonnes par vitesse
+      Donnee <- as.data.frame(bind_cols(X,Y))
+      colnames(Donnee) <- c("Nombre de vehicules","plus de 40km/h","plus de 30km/h","plus de 20km/h","plus de 10km/h") #Renomage des colonnes
+      # Calcul des seuils pour chaque courbes à partir d'un test de Darling Erdos
+      res2 <- NULL
+      if(input$vit=="Toute"){
+        for(i in c(2:5)){
+          tt <- DE.test(Donnee[,i]) # Darling-Erdos
+          x <- Donnee[tt$estimate,1]
+          res2 <- c(res2,x)
+          moyenne <- mean(res2)
+        }
+      }else{
+        D <- c("plus de 40km/h","plus de 30km/h","plus de 20km/h","plus de 10km/h")
+        ind <- which(D==input$vit)
+        tt <- DE.test(Donnee[,ind+1])
+        x <- Donnee[tt$estimate,1]
+        moyenne <- x
+      }
+      # Préparation de l'indexation de l'abscisse
+      mmV <- max(donnee$VehG)
+      if(mmV<100){
+        absi <- seq(0,100,10)
+      }else{
+        if(mmV<500){
+          absi <- seq(0,500,50)
+          
+        }else{
+          maxi <- floor(mmV/100)*100
+          absi <- seq(0,maxi,100)
+          
+        }
+      }
+      
+      # ordonnée de l'afichage de la valeur du seuil
+      miny <- min(vitesse40)
+      ordMoy <- (100+miny)/2
+      
+      # Graphique du seuil
+      graph <- ggplot(donnee)+aes(x=VehG, y=Vitesse, color = Legende, group=Legende)+geom_line(color="black")+
+        geom_smooth()+labs(x="Nombre de véhicules sur une tranche horaire", y = "Pourcentage de véhicule dépassant la vitesse données")+
+        ggtitle("Evolution de la vitesse de conduite selon le nombre d'usagers")+
+        geom_vline(xintercept=moyenne,color="red", size = 1.5)+
+        scale_x_continuous(breaks=c(absi), labels=c(absi))+
+        geom_text(aes(x=moyenne, y=ordMoy,label=round(moyenne)),size=5,angle=-90, vjust=-0.5,color="red")
+    
+      # Donnees tracées
+      Donnees <- list(Courbes_brute=TablRes,Courbes_lissees=Donnee)
+      
+      # Retour
+      list(graph=graph,Donnees=Donnees)
+    })
+  })
+    
+    
+    
+  
 ################################################################################################################# 
   
 #######  
@@ -499,8 +638,7 @@ shinyServer(function(session,input, output) {
       totA <- tabjoin[,paste(input$mobilite2,S1,1,sep = "")]
       totB <- tabjoin[,paste(input$mobilite2,S2,2,sep = "")]
     } # Vérification sur le nombre de données sélectionnée (il y en a-t-il assez pour des analyses pertinente)
-    if(length(tabjoin$date)<
-       28){
+    if(length(tabjoin$date)<28){
       "Période commune des deux capteurs trop courte"
     }else{ # Préparation des données pour la suite : tableau et non de colonnes
       res <- bind_cols(tabjoin$date,totA,totB)
@@ -891,7 +1029,7 @@ shinyServer(function(session,input, output) {
   output$downloadData <- downloadHandler(
     filename = "Comparaison_periode.csv", # Nom du fichier importé
     content = function(file) {
-      write.csv(prep_tabl(), file, row.names = FALSE,fileEncoding = "UTF-8")
+      write_excel_csv2(prep_tabl(), file)
     }
   )
   
@@ -911,132 +1049,23 @@ shinyServer(function(session,input, output) {
   # Graphique du seuil d'engorgement
   
   output$plot_seuil <- renderPlot({
-    input$mise_a_j2 #Pour conditionner la mise à jour
-    isolate({
-      # Récupération du sens sélectionné
-      orientation = input$sens3
-      # Récupération du tableau pré filtré 
-      tableau_temp <- Tabl_Engor()
-      
-      # Création des vecteurs pour stocker les différentes courbes de vitesse
-      Vit_moins10=NULL
-      Vit_moins20=NULL
-      Vit_moins30=NULL
-      Vit_moins40=NULL
-      for(i in tableau_temp$car_speed_hist_0to70plus){ # On parcours les répartitions de vitesse
-        vitesse <- unlist(i)
-        # Somme progressive sur les parts d'usagers selon la vitesse
-        vitesse10 <- vitesse[1]
-        vitesse20 <- sum(vitesse[1:2])
-        vitesse30 <- sum(vitesse[1:3])
-        vitesse40 <- sum(vitesse[1:4])
-        # Rajout des parts calculés aux vecteurs
-        Vit_moins10 <- c(Vit_moins10,vitesse10)
-        Vit_moins20 <- c(Vit_moins20,vitesse20)
-        Vit_moins30 <- c(Vit_moins30,vitesse30)
-        Vit_moins40 <- c(Vit_moins40,vitesse40)
-      }
-      tableau_temp$vit_moins10 <- Vit_moins10
-      tableau_temp$vit_moins20 <- Vit_moins20
-      tableau_temp$vit_moins30 <- Vit_moins30
-      tableau_temp$vit_moins40 <- Vit_moins40
-      
-      # Création du tableau selon la direction choisie
-      if(orientation=="Toute"){
-        tableau_temp <- tableau_temp[,c("car","heavy","vit_moins10","vit_moins20","vit_moins30","vit_moins40")]
-        tableau_temp <- tableau_temp %>% mutate(vehic = car + heavy)
-        tableau_temp <- tableau_temp %>% arrange(vehic)
-      }
-      if(orientation=="Rgt"){
-        tableau_temp <- tableau_temp[,c("car_rgt","heavy_rgt","vit_moins10","vit_moins20","vit_moins30","vit_moins40")]
-        tableau_temp <- tableau_temp %>% mutate(vehic = car_rgt + heavy_rgt)
-        tableau_temp <- tableau_temp %>% arrange(vehic)
-      }
-      if(orientation=="Lft"){
-        tableau_temp <- tableau_temp[,c("car_lft","heavy_lft","vit_moins10","vit_moins20","vit_moins30","vit_moins40")]
-        tableau_temp <- tableau_temp %>% mutate(vehic = car_lft + heavy_lft)
-        tableau_temp <- tableau_temp %>% arrange(vehic)
-      }
-      # Calcul de moyenne glissante sur les parts
-      vitesse10 <- embed(tableau_temp$vit_moins10,50)
-      vitesse10 <- apply(vitesse10,1,mean)
-      vitesse10 <- 100-vitesse10
-      vitesse20 <- embed(tableau_temp$vit_moins20,50)
-      vitesse20 <- apply(vitesse20,1,mean)
-      vitesse20 <- 100-vitesse20
-      vitesse30 <- embed(tableau_temp$vit_moins30,50)
-      vitesse30 <- apply(vitesse30,1,mean)
-      vitesse30 <- 100-vitesse30
-      vitesse40 <- embed(tableau_temp$vit_moins40,50)
-      vitesse40 <- apply(vitesse40,1,mean)
-      vitesse40 <- 100-vitesse40
-      # Réalisation des abcisses
-      vehicule <- embed(tableau_temp$vehic,50)
-      vehicule <- apply(vehicule,1,mean)
-      VehG <- rep(vehicule,4)
-      # Préparation du tableau pour le graphique
-      Vitesse <- c(vitesse10,vitesse20,vitesse30,vitesse40)
-      k=length(vehicule)
-      Legende <- c(rep("Plus de 10km/h",k),rep("Plus de 20km/h",k),rep("Plus de 30km/h",k),rep("Plus de 40km/h",k))
-      donnee <- tibble(VehG,Vitesse,Legende)
-      # Récupération des courbes lissées à partir de la méthode smooth de R
-      p <- ggplot(donnee)+aes(x=VehG, y=Vitesse, color = Legende, group=Legende)+stat_smooth()
-      y <- ggplot_build(p)$data[[1]][,1:3]
-      # Création du tableau pour stocké les données
-      Donnee <- NULL 
-      for(i in levels(as.factor(y$colour))){
-        Donnee <- bind_cols(Donnee,y[y$colour==i,-1])
-      }
-      X=Donnee[,1]
-      Y=Donnee[,c(2,4,6,8)]
-      Y <- t(t(Y)[order(t(Y)[,1]),]) # Rangement des colonnes par vitesse
-      Donnee <- as.data.frame(bind_cols(X,Y))
-      # Calcul des seuils pour chaque courbes à partir d'un test de Darling Erdos
-      res2 <- NULL
-      if(input$vit=="Toute"){
-        for(i in c(2:5)){
-          tt <- DE.test(Donnee[,i]) # Darling-Erdos
-          x <- Donnee[tt$estimate,1]
-          res2 <- c(res2,x)
-          moyenne <- mean(res2)
-        }
-      }else{
-        D <- c("plus de 40km/h","plus de 30km/h","plus de 20km/h","plus de 10km/h")
-        ind <- which(D==input$vit)
-        tt <- DE.test(Donnee[,ind+1])
-        x <- Donnee[tt$estimate,1]
-        moyenne <- x
-      }
-      # Préparation de l'indexation de l'abscisse
-      mmV <- max(donnee$VehG)
-      if(mmV<100){
-        absi <- seq(0,100,10)
-      }else{
-        if(mmV<500){
-          absi <- seq(0,500,50)
-          
-        }else{
-          maxi <- floor(mmV/100)*100
-          absi <- seq(0,maxi,100)
-          
-        }
-      }
-      
-      # ordonnée de l'afichage de la valeur du seuil
-      miny <- min(vitesse40)
-      ordMoy <- (100+miny)/2
-      
-      # Graphique du seuil
-      ggplot(donnee)+aes(x=VehG, y=Vitesse, color = Legende, group=Legende)+geom_line(color="black")+
-        geom_smooth()+labs(x="Nombre de véhicules sur une tranche horaire", y = "Pourcentage de véhicule dépassant la vitesse données")+
-        ggtitle("Evolution de la vitesse de conduite selon le nombre d'usagers")+
-        geom_vline(xintercept=moyenne,color="red", size = 1.5)+
-        scale_x_continuous(breaks=c(absi), labels=c(absi))+
-        geom_text(aes(x=moyenne, y=ordMoy,label=round(moyenne)),size=5,angle=-90, vjust=-0.5,color="red")
-    })
+      plot_seuil_prep()$graph
   })
   
+  output$downloadbrut <- downloadHandler(
+    filename = "Courbes_brutes.csv", # Nom du fichier importé
+    content = function(file) {
+      write_excel_csv2(plot_seuil_prep()$Donnees$Courbes_brute, file)
+    }
+  )
   
+  
+  output$downloadlisse <- downloadHandler(
+    filename = "Courbes_lissées.csv", # Nom du fichier importé
+    content = function(file) {
+      write_excel_csv2(plot_seuil_prep()$Donnees$Courbes_lissees, file)
+    }
+  )
   
   
 ################################################################################################################# 
@@ -1237,7 +1266,7 @@ shinyServer(function(session,input, output) {
   output$downloadData2 <- downloadHandler(
     filename = "Comparaison_capteur.csv", # Nom du fichier importé
     content = function(file) {
-      write.csv(prep_tabl2(), file, row.names = FALSE,fileEncoding = "UTF-8")
+      write_excel_csv2(prep_tabl2(), file, row.names = FALSE,fileEncoding = "UTF-8")
     }
   )
   
@@ -1423,6 +1452,24 @@ shinyServer(function(session,input, output) {
     }
   )
   
+  output$OutBox17 = renderUI(
+    if(is.null(donnee_import()$donnee)){return()
+      }else{
+    if (length(Tabl_Engor()[,1])<100 ){return()
+    }else{
+      downloadButton("downloadbrut", "Import des données des courbes brutes (noire)")
+      }}
+  )
+  
+  output$OutBox18= renderUI(
+    if(is.null(donnee_import()$donnee)){return()
+    }else{
+      if (length(Tabl_Engor()[,1])<100 ){return()
+      }else{
+        downloadButton("downloadlisse", "Import des données des courbes lissées")
+      }}
+  )
+   
 ################################################################################################################# 
   
 #######  

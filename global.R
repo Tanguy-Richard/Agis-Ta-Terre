@@ -18,6 +18,7 @@ library(synchrony) # fonction peaks (synchronicité des pics)
 library(forecast) # fonction ma : moving average
 library(zoo) # fonction na.trim
 library(plotly) # Pour le graphique des heures d'engorgement
+library(readr) # Pour l'export encsv compatible excel
 
 ########
 # Parametrage des package
@@ -211,6 +212,7 @@ desaisonalite=function(tableau,col,model){
   
   return(list(tendance=tendance,cycle=cycle,bruit=decycle))
 }
+
 
 
 

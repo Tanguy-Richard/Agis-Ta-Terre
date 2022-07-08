@@ -146,7 +146,9 @@ shinyUI(
                         p("Avertissement :"),
                         p("1. La barre apparait toujours, même pour les routes sans embouteillages."),
                         p("2. Le calcul conduisant au placement de la barre n'est pas parfait : elle peut être mal placée."),
-                        uiOutput("OutBox2")
+                        uiOutput("OutBox2"),
+                        uiOutput("OutBox17"),
+                        uiOutput("OutBox18")
                  )
                )
       ),
@@ -247,7 +249,7 @@ shinyUI(
           p("Séparation en tendance, cycle et bruit :"),
           p("Après un filtrage des données selon les choix de l’utilisateur, on détermine la période d’activité commune des deux capteurs sélectionnées. 
           Pour trouver la tendance (évolution générale du flux),  pour chaque capteur, on réalise une moyenne glissante sur 14 jours (2 périodes hebdomadaires), c’est le graphique du premier onglet. 
-          On soustrait la tendance au flux total pour avoir de données sans tendance. Pour ces données, on fait une moyenne sur tous les lundis, puis les mardis, ect. Cela nous donne les valeurs associées au cycle de la semaine (second onglet). La partie restante après la soustraction du cycle hebdomadaire correspond au bruit statistique (troisième onglet)."),
+          On soustrait la tendance au flux total pour avoir de données sans tendance. Pour ces données, on fait une moyenne sur tous les lundis, puis les mardis, etc. Cela nous donne les valeurs associées au cycle de la semaine (second onglet). La partie restante après la soustraction du cycle hebdomadaire correspond au bruit statistique (troisième onglet)."),
           br(),
           p("Indicateurs du lien entre les bruits :"),
           br(),
