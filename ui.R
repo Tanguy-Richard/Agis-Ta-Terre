@@ -133,7 +133,15 @@ shinyUI(
                                   end    = Sys.Date()-days(1),
                                   min    = "2021-01-01",
                                   max    = Sys.Date()-days(1)),
-                   actionButton("mise_a_j2", "Mettre à jour")
+                   actionButton("mise_a_j2", "Mettre à jour"),
+                   radioButtons(
+                     "calcul_seuil",
+                     "Choix du seuil :",
+                     selected = "automatique",
+                     choices = c("automatique","manuel"),
+                     inline = TRUE
+                   ),
+                   uiOutput("Box6")
                  )), 
                  column(width = 9,
                         h5("Précisions sur le graphique"),
@@ -218,7 +226,8 @@ shinyUI(
                  ))),
                  column(width = 9,
                            h3("Quelle est l'heure d'engorgement ?"),
-                           uiOutput("OutBox16")
+                           uiOutput("OutBox16"),
+                           uiOutput("OutBox19")
                  ))
       ), 
       tabPanel("Méthodes et avertissements",
@@ -239,7 +248,7 @@ shinyUI(
           p("On s’appuie sur un test de Wilcoxon Mann Whitney. L’idée est de comparer, pour chaque créneau horaire, la répartition des valeurs de chacune des périodes. Le test consiste à regarder la distance entre les fonctions de répartition empirique, si elles sont éloignées, le test rejette l’hypothèse nulle :  l’égalité des lois. L’option « Significatif » indique une p-value inférieure à 0.05, celle « Entre deux » une  p-value entre 0.05 et 0.1 et celle « Non significatif » une p-value supérieure à 0.1."),
           h4("Seuil d’engorgement :"),
           p("Méthode pour tracer les courbes :"),
-          p("On commence par filtrer les données selon les sélections de l’utilisateur. On isole la partie correspondant au pourcentage de conducteur dépassant chaque vitesse. On range les données dans l’ordre croissant du nombre de véhicules (voitures + camions). On a pré-lissé les données à l’aide d’une moyenne glissante d’une amplitude de 50 pour dégager un début tendance (courbe noir du graphique). À partir de cette tendance, on a lissé nos données à l’aide de l’outil geom_smooth de R. Ces courbes de lissages sont les courbes colorées du graphique."),
+          p("On commence par filtrer les données selon les sélections de l’utilisateur. On isole la partie correspondant au pourcentage de conducteur dépassant chaque vitesse. On range les données dans l’ordre croissant du nombre de véhicules (voitures + camions). On a pré-lissé les données à l’aide d’une moyenne glissante d’une amplitude de 50 pour dégager un début tendance (courbe noir du graphique). À partir de cette tendance, on a lissé nos données à l’aide de l’outil geom_smooth de ggplot2. Ces courbes de lissages sont les courbes colorées du graphique."),
           br(),
           p("Méthode pour trouver le seuil :"),
           p("L’objectif est de déterminer un seuil de rupture dans la courbe de lissage. Pour cela, on utilise un test de Darling Erdös (dérivé du test de CUSUM). La fonction est implémentée dans le Package",
