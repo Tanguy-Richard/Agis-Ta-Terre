@@ -591,7 +591,7 @@ shinyServer(function(session,input, output) {
       graph <- ggplot(donnee)+aes(x=VehG, y=Vitesse, color = Legende, group=Legende)+geom_line(color="black")+
         geom_smooth()+labs(x="Nombre de véhicules sur une tranche horaire", y = "Pourcentage de véhicule dépassant la vitesse données")+
         ggtitle("Evolution de la vitesse de conduite selon le nombre d'usagers")+
-        scale_x_continuous(breaks=c(absi), labels=c(absi))
+        scale_x_continuous(breaks=c(absi), labels=c(absi))+ labs(fill = "")
     
       # Donnees tracées
       Donnees <- list(Courbes_brute=TablRes,Courbes_lissees=Donnee)
@@ -604,14 +604,15 @@ shinyServer(function(session,input, output) {
   
     plot_seuil_graph <- reactive({
       
+      ordMoy <- plot_seuil_prep()$ordMoy
       if(input$calcul_seuil == "automatique"){
         moyenne <- plot_seuil_prep()$moyenne
-        ordMoy <- plot_seuil_prep()$ordMoy
         graph <- plot_seuil_prep()$graph + geom_vline(xintercept=moyenne,color="red", size = 1.5)+
           geom_text(aes(x=moyenne, y=ordMoy,label=round(moyenne)),size=5,angle=-90, vjust=-0.5,color="red")
       }
       if(input$calcul_seuil == "manuel"){
-        graph <- plot_seuil_prep()$graph + geom_vline(xintercept=input$seuil,color="red", size = 1.5)
+        graph <- plot_seuil_prep()$graph + geom_vline(xintercept=input$seuil,color="red", size = 1.5)+
+          geom_text(aes(x=input$seuil, y=ordMoy,label=input$seuil),size=5,angle=-90, vjust=-0.5,color="red")
       }
       graph
     })
@@ -1343,7 +1344,7 @@ shinyServer(function(session,input, output) {
       "Import à faire"
       }
     }else{
-      "Done"
+      "Fait"
     }
   )
   
