@@ -17,6 +17,8 @@ library(CPAT) # test de Darling Erdos
 library(synchrony) # fonction peaks (synchronicité des pics)
 library(forecast) # fonction ma : moving average
 library(zoo) # fonction na.trim
+library(plotly) # Pour le graphique des heures d'engorgement
+library(readr) # Pour l'export encsv compatible excel
 
 ########
 # Parametrage des package
@@ -49,6 +51,14 @@ listeNombis <- c("Burel-01","Leclerc-02","ParisMarché-03","rueVignes-04","Paris
 # Import des donnees
 
 #######################################################################################
+
+
+##########################################################
+### clef pour l'API Telraam (à générer su telraam.net) ###
+##########################################################
+
+
+key = "UZiPH7KKBY1TS4wqAV8LHaXbN2FlBDlp7s5aXTcV"
 
 
 #################################################
@@ -150,6 +160,15 @@ Selection_Date=function(Donnees,Liste_interval){
 ########################
 
 
+#' Title
+#'
+#' @param Donnees 
+#' @param Liste_date 
+#'
+#' @return
+#' @export
+#'
+#' @examples
 Selection_Date2=function(Donnees,Liste_date){
   Valeurs_Bool = unlist(lapply(Donnees$date, FUN = function(x){
     date(x) %in% Liste_date}))
@@ -193,6 +212,7 @@ desaisonalite=function(tableau,col,model){
   
   return(list(tendance=tendance,cycle=cycle,bruit=decycle))
 }
+
 
 
 

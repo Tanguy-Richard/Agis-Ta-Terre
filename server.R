@@ -19,10 +19,10 @@ shinyServer(function(session,input, output) {
     isolate({
       
     if(input$captIDsup!=""){
-      key = "UZiPH7KKBY1TS4wqAV8LHaXbN2FlBDlp7s5aXTcV"
+      
       idseg = input$captIDsup
       status <- GET(paste0("https://telraam-api.net/v1/segments/id/", idseg),
-                    add_headers("X-Api-Key" = "Yeah"))$status_code
+                    add_headers("X-Api-Key" = key))$status_code
       if(status==200){
         FALSE
       }else{
@@ -61,10 +61,11 @@ shinyServer(function(session,input, output) {
   
   donnee_import <- reactive({
     
-    listres <- list(geomet = NULL, donnee = NULL)
     
     input$go_import #Pour conditionner la mise à jour
     isolate({
+      
+    listres <- list(geomet = NULL, donnee = NULL)
     
     try({
       
@@ -80,9 +81,6 @@ shinyServer(function(session,input, output) {
       listeNom_temp <- listeNom
     }
     
-    # Clefs d'acces de l'API 
-    key = "UZiPH7KKBY1TS4wqAV8LHaXbN2FlBDlp7s5aXTcV"
-    key2= "5XtrVimmiF7JEbqXkgIHH8BQMwsnMU0R3sJ92Pa4"
     
     ### Fonction recup date (l'API ne permet de recupere les donnees que par laps de 3 mois)
     ### On segmente la période en bout de 3 mois pour importer par petits bouts
@@ -125,7 +123,7 @@ shinyServer(function(session,input, output) {
       #recuperation des donnees mesurees par le capteur
       for(i in 1:length(dates$debut)){
         #recuperation des donnees
-        resTraffic <- POST("https://telraam-api.net/v1/reports/traffic", add_headers("X-Api-Key" = key2)
+        resTraffic <- POST("https://telraam-api.net/v1/reports/traffic", add_headers("X-Api-Key" = key)
                            , body = paste0('{
     "level": "segments",
     "format": "per-hour",
@@ -434,8 +432,6 @@ shinyServer(function(session,input, output) {
   # Premiere sélection pour la détermination de seuil d'engorgement
   
   Tabl_Engor <- reactive({
-    input$mise_a_j2 #Pour conditionner la mise à jour
-    isolate({
       #récupération des données d'import
       Tableau <- donnee_import()$donnee
     
@@ -447,9 +443,179 @@ shinyServer(function(session,input, output) {
       date <- input$daterange3
       periode <- interval(ymd_hms(paste(date[1],"00:00:00")),ymd_hms(paste(date[2],"23:59:00")))
       Selection_Date(tableau_temp,periode)$data1
-    })
   })
   
+  
+  plot_seuil_prep_1 <- reactive({
+    input$mise_a_j2 #Pour conditionner la mise à jour
+    isolate({
+      # Récupération du sens sélectionné
+      orientation = input$sens3
+      # Récupération du tableau pré filtré 
+      tableau_temp <- Tabl_Engor()
+      
+      # Création des vecteurs pour stocker les différentes courbes de vitesse
+      Vit_moins10=NULL
+      Vit_moins20=NULL
+      Vit_moins30=NULL
+      Vit_moins40=NULL
+      for(i in tableau_temp$car_speed_hist_0to70plus){ # On parcours les répartitions de vitesse
+        vitesse <- unlist(i)
+        # Somme progressive sur les parts d'usagers selon la vitesse
+        vitesse10 <- vitesse[1]
+        vitesse20 <- sum(vitesse[1:2])
+        vitesse30 <- sum(vitesse[1:3])
+        vitesse40 <- sum(vitesse[1:4])
+        # Rajout des parts calculés aux vecteurs
+        Vit_moins10 <- c(Vit_moins10,vitesse10)
+        Vit_moins20 <- c(Vit_moins20,vitesse20)
+        Vit_moins30 <- c(Vit_moins30,vitesse30)
+        Vit_moins40 <- c(Vit_moins40,vitesse40)
+      }
+      tableau_temp$vit_moins10 <- Vit_moins10
+      tableau_temp$vit_moins20 <- Vit_moins20
+      tableau_temp$vit_moins30 <- Vit_moins30
+      tableau_temp$vit_moins40 <- Vit_moins40
+      
+      # Création du tableau selon la direction choisie
+      if(orientation=="Toute"){
+        tableau_temp <- tableau_temp[,c("car","heavy","vit_moins10","vit_moins20","vit_moins30","vit_moins40")]
+        tableau_temp <- tableau_temp %>% mutate(vehic = car + heavy)
+        tableau_temp <- tableau_temp %>% arrange(vehic)
+      }
+      if(orientation=="Rgt"){
+        tableau_temp <- tableau_temp[,c("car_rgt","heavy_rgt","vit_moins10","vit_moins20","vit_moins30","vit_moins40")]
+        tableau_temp <- tableau_temp %>% mutate(vehic = car_rgt + heavy_rgt)
+        tableau_temp <- tableau_temp %>% arrange(vehic)
+      }
+      if(orientation=="Lft"){
+        tableau_temp <- tableau_temp[,c("car_lft","heavy_lft","vit_moins10","vit_moins20","vit_moins30","vit_moins40")]
+        tableau_temp <- tableau_temp %>% mutate(vehic = car_lft + heavy_lft)
+        tableau_temp <- tableau_temp %>% arrange(vehic)
+      }
+      # Calcul de moyenne glissante sur les parts
+      vitesse10 <- embed(tableau_temp$vit_moins10,50)
+      vitesse10 <- apply(vitesse10,1,mean)
+      vitesse10 <- 100-vitesse10
+      vitesse20 <- embed(tableau_temp$vit_moins20,50)
+      vitesse20 <- apply(vitesse20,1,mean)
+      vitesse20 <- 100-vitesse20
+      vitesse30 <- embed(tableau_temp$vit_moins30,50)
+      vitesse30 <- apply(vitesse30,1,mean)
+      vitesse30 <- 100-vitesse30
+      vitesse40 <- embed(tableau_temp$vit_moins40,50)
+      vitesse40 <- apply(vitesse40,1,mean)
+      vitesse40 <- 100-vitesse40
+      # Réalisation des abcisses
+      vehicule <- embed(tableau_temp$vehic,50)
+      vehicule <- apply(vehicule,1,mean)
+      
+      # Préparation du tableau pour le graphique
+      
+      
+      list(vitesse10=vitesse10,vitesse20=vitesse20,vitesse30=vitesse30,
+           vitesse40=vitesse40, vehicule=vehicule)
+    })
+  })  
+
+      
+    plot_seuil_prep <- reactive({
+      input$mise_a_j2 #Pour conditionner la mise à jour
+      isolate({    
+      vitesse10 = plot_seuil_prep_1()$vitesse10
+      vitesse20 = plot_seuil_prep_1()$vitesse20
+      vitesse30 = plot_seuil_prep_1()$vitesse30
+      vitesse40 = plot_seuil_prep_1()$vitesse40
+      vehicule = plot_seuil_prep_1()$vehicule
+      
+        
+      VehG <- rep(vehicule,4)    
+      Vitesse <- c(vitesse10,vitesse20,vitesse30,vitesse40)
+      #Création du tableau pour l'import
+      TablRes <- as.data.frame(cbind(vehicule,vitesse10,vitesse20,vitesse30,vitesse40))
+      colnames(TablRes) <- c("Nombre de vehicules","plus de 40km/h","plus de 30km/h","plus de 20km/h","plus de 10km/h")
+      k=length(vehicule)
+      Legende <- c(rep("Plus de 10km/h",k),rep("Plus de 20km/h",k),rep("Plus de 30km/h",k),rep("Plus de 40km/h",k))
+      donnee <- tibble(VehG,Vitesse,Legende)
+      
+      
+      # Récupération des courbes lissées à partir de la méthode smooth de R
+      p <- ggplot(donnee)+aes(x=VehG, y=Vitesse, color = Legende, group=Legende)+stat_smooth()
+      y <- ggplot_build(p)$data[[1]][,1:3]
+      # Création du tableau pour stocké les données
+      Donnee <- NULL 
+      for(i in levels(as.factor(y$colour))){
+        Donnee <- bind_cols(Donnee,y[y$colour==i,-1])
+      }
+      X=Donnee[,1]
+      Y=Donnee[,c(2,4,6,8)]
+      Y <- t(t(Y)[order(t(Y)[,1]),]) # Rangement des colonnes par vitesse
+      Donnee <- as.data.frame(bind_cols(X,Y))
+      colnames(Donnee) <- c("Nombre de vehicules","plus de 40km/h","plus de 30km/h","plus de 20km/h","plus de 10km/h") #Renomage des colonnes
+      # Calcul des seuils pour chaque courbes à partir d'un test de Darling Erdos
+      res2 <- NULL
+      if(input$vit=="Toute"){
+        for(i in c(2:5)){
+          tt <- DE.test(Donnee[,i]) # Darling-Erdos
+          x <- Donnee[tt$estimate,1]
+          res2 <- c(res2,x)
+          moyenne <- mean(res2)
+        }
+      }else{
+        D <- c("plus de 40km/h","plus de 30km/h","plus de 20km/h","plus de 10km/h")
+        ind <- which(D==input$vit)
+        tt <- DE.test(Donnee[,ind+1])
+        x <- Donnee[tt$estimate,1]
+        moyenne <- x
+      }
+      # Préparation de l'indexation de l'abscisse
+      mmV <- max(donnee$VehG)
+      if(mmV<100){
+        absi <- seq(0,100,10)
+      }else{
+        if(mmV<500){
+          absi <- seq(0,500,50)
+          
+        }else{
+          maxi <- floor(mmV/100)*100
+          absi <- seq(0,maxi,100)
+          
+        }
+      }
+      
+      # ordonnée de l'afichage de la valeur du seuil
+      miny <- min(vitesse40)
+      ordMoy <- (100+miny)/2
+      
+      # Graphique du seuil
+      graph <- ggplot(donnee)+aes(x=VehG, y=Vitesse, color = Legende, group=Legende)+geom_line(color="black")+
+        geom_smooth()+labs(x="Nombre de véhicules sur une tranche horaire", y = "Pourcentage de véhicule dépassant la vitesse données")+
+        ggtitle("Evolution de la vitesse de conduite selon le nombre d'usagers")+
+        scale_x_continuous(breaks=c(absi), labels=c(absi))+ labs(fill = "")
+    
+      # Donnees tracées
+      Donnees <- list(Courbes_brute=TablRes,Courbes_lissees=Donnee)
+      
+      # Retour
+      list(graph=graph,Donnees=Donnees, moyenne = moyenne, ordMoy=ordMoy)
+    })  
+  })
+    
+  
+    plot_seuil_graph <- reactive({
+      
+      ordMoy <- plot_seuil_prep()$ordMoy
+      if(input$calcul_seuil == "automatique"){
+        moyenne <- plot_seuil_prep()$moyenne
+        graph <- plot_seuil_prep()$graph + geom_vline(xintercept=moyenne,color="red", size = 1.5)+
+          geom_text(aes(x=moyenne, y=ordMoy,label=round(moyenne)),size=5,angle=-90, vjust=-0.5,color="red")
+      }
+      if(input$calcul_seuil == "manuel"){
+        graph <- plot_seuil_prep()$graph + geom_vline(xintercept=input$seuil,color="red", size = 1.5)+
+          geom_text(aes(x=input$seuil, y=ordMoy,label=input$seuil),size=5,angle=-90, vjust=-0.5,color="red")
+      }
+      graph
+    })
   
 ################################################################################################################# 
   
@@ -545,6 +711,120 @@ shinyServer(function(session,input, output) {
     })
   })
   
+  
+  
+  
+  
+  
+  
+################################################################################################################# 
+  
+#######  
+  
+# Onglet Heure d'engorgement
+  
+#######
+  
+  
+  # Définition du Graphique (character si vide)
+  
+  plot_eng_react <- reactive({
+    
+    #Séléction du capteur sélectionnée
+    don_1=subset(donnee_import()$donnee, segment_id==input$capteur4)
+    
+    #Séléction de la période
+    date <- input$daterange5
+    
+    periode <- interval(ymd(date[1]),ymd(date[2]))
+    don_1=Selection_Date(don_1,periode)$data1
+    
+    if(length(don_1$date)==0){  # Test pour savoir si la sélection est vide
+      "Pas de données pour la selection de la période"
+    }else{
+      if(input$Vacance4=="Non"){
+        don_1 <- Selection_Date(don_1,Vacances$interval)$data2
+      }
+      if(input$Vacance4=="Seulement les vacances"){
+        don_1 <- Selection_Date(don_1,Vacances$interval)$data1
+      }
+      if(length(don_1$date)==0){  # Test pour savoir si la sélection est vide
+        don_1 <- "Pas de données pour la selection de la période"
+      }else{ # Sélection de jours fériés
+        if(input$JF4=="Non"){
+          don_1 <- Selection_Date2(don_1,JoursFeries)$data2
+        }
+        if(input$JF4=="Seulement les jours fériés"){
+          don_1 <- Selection_Date2(don_1,JoursFeries)$data1
+        }
+        if(length(don_1$date)==0){  # Test pour savoir si la sélection est vide
+          "Pas de données pour la selection de la période"
+        }else{
+    # Séléction des jours de la semaine
+    jours <- input$SM4
+    # Calcul des moyenne par créneau horaire
+    v=don_1%>%filter(wday(date) %in% jours)%>% group_by(hour(date)) %>% summarise(n=mean(v85,na.rm=TRUE))
+    colnames(v)=c("Heure", "Vitesse")
+    bu_rgt=don_1%>%filter(wday(date) %in% jours)%>% group_by(hour(date)) %>% summarise(n_rgt=mean(car_rgt+heavy_rgt,na.rm=TRUE))
+    colnames(bu_rgt)=c("Heure", "Voiture_BversA")
+    bu_lft=don_1%>%filter(wday(date) %in% jours)%>% group_by(hour(date)) %>% summarise(n_lft=mean(car_lft+heavy_lft,na.rm=TRUE))
+    colnames(bu_lft)=c("Heure", "Voiture_AversB")
+    # Tableau final pour le graphique
+    bu = full_join(bu_lft, bu_rgt, by = "Heure")
+    bu = full_join(bu, v, by = "Heure")
+    
+    if(length(bu$Heure)==0){ # Test pour savoir si la sélection est vide
+      "Pas de données pour la selection de la période"
+    }else{
+      # Création du graphique
+      # Placement des courbes des véhicules
+      fig <- plot_ly(bu, x = ~Heure)
+      fig <- fig %>% add_trace(y= ~Voiture_BversA, mode = "lines+markers", name = "B vers A", 
+                               line=list(color="blue", dash = "dot"),
+                               marker=list(color="blue"))
+      fig <- fig %>% add_trace(y= ~Voiture_AversB, mode = "lines+markers", name = "A vers B", 
+                               line=list(color="blue", dash = "dash"),
+                               marker=list(color="blue"))
+      # Création du second axe des ordonnées
+      ay <- list(
+        tickfont = list(color = "red"),
+        overlaying = "y",
+        side = "right",
+        title = "Vitesse v85 moyenne (km/h)")
+      # Placement de la courbe de vitesse
+      fig <- fig %>% add_trace(y= ~Vitesse,  yaxis = "y2", mode = "lines+markers", name = "Vitesse v85 moyenne", 
+                               line=list(color="red"),
+                               marker=list(color="red"))
+      # Mise en place du titre et des axes
+      fig <- fig %>% layout(
+        title = "", yaxis2 = ay,
+        xaxis = list(title="Heure"),
+        yaxis = list(title="Nombre de véhicules moyen")
+      )%>%
+        layout(plot_bgcolor='#e5ecf6',
+               xaxis = list(
+                 zerolinecolor = '#ffff',
+                 zerolinewidth = 2,
+                 gridcolor = 'ffff',
+                 dtick=1),
+               yaxis = list(
+                 tickfont= list(color="blue"),
+                 zerolinecolor = '#ffff',
+                 zerolinewidth = 2,
+                 gridcolor = 'ffff')
+        )
+      
+      list(fig=fig,Donnee=bu) #Valeur stokée dans le reactive
+      
+    }    
+    
+    }
+    
+      }
+    }
+  })   
+  
+  
 ##########################################################################################################################
 #
 # Définition des outputs
@@ -611,8 +891,7 @@ shinyServer(function(session,input, output) {
     # Création du graphique faisant apparaitre les courbes des deux périodes
     l <- ggplot(Donnee)+aes(x = Heure, y=Nombre_usagers, group = Periode, color = Periode)+geom_line(aes(linetype=Periode),size=1.5)+
       labs(x="Heure", y = "Nombre moyen d'usagers")+
-      geom_line(aes(x = Heure, y = Born1,group = Periode , color = Periode, linetype=Periode ))+
-      geom_line(aes(x = Heure, y = Born2,group = Periode , color = Periode, linetype=Periode ))+
+      geom_ribbon(aes(ymin=Born1, ymax=Born2, fill = Periode), linetype = "blank",alpha = 1/4)+
       ggtitle(ord_txt())+scale_x_continuous(breaks=heure,limits = c(heure[1]-0.5,heure[k]+0.5))+
       expand_limits(y = 0)
     
@@ -651,7 +930,7 @@ shinyServer(function(session,input, output) {
         title = element_text(hjust = 0.5),
         axis.text.y = element_blank(),
         axis.ticks.y = element_blank())+
-      labs(title="Significativité d'une différence de comportement",
+      labs(title="Significativité d'une différence de comportement (*)",
            x="Heure",
            y="")
     
@@ -711,8 +990,7 @@ shinyServer(function(session,input, output) {
     # Création du graphique faisant apparaitre les courbes des deux périodes
     l <- ggplot(Donnee)+aes(x = Heure, y=Nombre_usagers, group = Periode, color = Periode)+geom_line(aes(linetype=Periode),size=1.5)+
       labs(x="Heure", y = "Nombre moyen d'usagers")+
-      geom_line(aes(x = Heure, y = Born1,group = Periode , color = Periode, linetype=Periode ))+
-      geom_line(aes(x = Heure, y = Born2,group = Periode , color = Periode, linetype=Periode ))+
+      geom_ribbon(aes(ymin=Born1, ymax=Born2, fill = Periode), linetype = "blank",alpha = 1/4)+
       ggtitle(ord_txt())+scale_x_continuous(breaks=heure,limits = c(heure[1]-0.5,heure[k]+0.5))+
       expand_limits(y = 0)
     
@@ -751,7 +1029,7 @@ shinyServer(function(session,input, output) {
         title = element_text(hjust = 0.5),
         axis.text.y = element_blank(),
         axis.ticks.y = element_blank())+
-      labs(title="Significativité d'une différence de comportement",
+      labs(title="Significativité d'une différence de comportement (*)",
            x="Heure",
            y="")
     
@@ -780,7 +1058,7 @@ shinyServer(function(session,input, output) {
   output$downloadData <- downloadHandler(
     filename = "Comparaison_periode.csv", # Nom du fichier importé
     content = function(file) {
-      write.csv(prep_tabl(), file, row.names = FALSE,fileEncoding = "UTF-8")
+      write_excel_csv2(prep_tabl(), file)
     }
   )
   
@@ -800,133 +1078,23 @@ shinyServer(function(session,input, output) {
   # Graphique du seuil d'engorgement
   
   output$plot_seuil <- renderPlot({
-    input$mise_a_j2 #Pour conditionner la mise à jour
-    isolate({
-      # Récupération du sens sélectionné
-      orientation = input$sens3
-      # Récupération du tableau pré filtré 
-      tableau_temp <- Tabl_Engor()
-      
-      # Création des vecteurs pour stocker les différentes courbes de vitesse
-      Vit_moins10=NULL
-      Vit_moins20=NULL
-      Vit_moins30=NULL
-      Vit_moins40=NULL
-      for(i in tableau_temp$car_speed_hist_0to70plus){ # On parcours les répartitions de vitesse
-        vitesse <- unlist(i)
-        # Somme progressive sur les parts d'usagers selon la vitesse
-        vitesse10 <- vitesse[1]
-        vitesse20 <- sum(vitesse[1:2])
-        vitesse30 <- sum(vitesse[1:3])
-        vitesse40 <- sum(vitesse[1:4])
-        # Rajout des parts calculés aux vecteurs
-        Vit_moins10 <- c(Vit_moins10,vitesse10)
-        Vit_moins20 <- c(Vit_moins20,vitesse20)
-        Vit_moins30 <- c(Vit_moins30,vitesse30)
-        Vit_moins40 <- c(Vit_moins40,vitesse40)
-      }
-      tableau_temp$vit_moins10 <- Vit_moins10
-      tableau_temp$vit_moins20 <- Vit_moins20
-      tableau_temp$vit_moins30 <- Vit_moins30
-      tableau_temp$vit_moins40 <- Vit_moins40
-      
-      # Création du tableau selon la direction choisie
-      if(orientation=="Toute"){
-        tableau_temp <- tableau_temp[,c("car","heavy","vit_moins10","vit_moins20","vit_moins30","vit_moins40")]
-        tableau_temp <- tableau_temp %>% mutate(vehic = car + heavy)
-        tableau_temp <- tableau_temp %>% arrange(vehic)
-      }
-      if(orientation=="Rgt"){
-        tableau_temp <- tableau_temp[,c("car_rgt","heavy_rgt","vit_moins10","vit_moins20","vit_moins30","vit_moins40")]
-        tableau_temp <- tableau_temp %>% mutate(vehic = car_rgt + heavy_rgt)
-        tableau_temp <- tableau_temp %>% arrange(vehic)
-      }
-      if(orientation=="Lft"){
-        tableau_temp <- tableau_temp[,c("car_lft","heavy_lft","vit_moins10","vit_moins20","vit_moins30","vit_moins40")]
-        tableau_temp <- tableau_temp %>% mutate(vehic = car_lft + heavy_lft)
-        tableau_temp <- tableau_temp %>% arrange(vehic)
-      }
-      # Calcul de moyenne glissante sur les parts
-      vitesse10 <- embed(tableau_temp$vit_moins10,50)
-      vitesse10 <- apply(vitesse10,1,mean)
-      vitesse10 <- 100-vitesse10
-      vitesse20 <- embed(tableau_temp$vit_moins20,50)
-      vitesse20 <- apply(vitesse20,1,mean)
-      vitesse20 <- 100-vitesse20
-      vitesse30 <- embed(tableau_temp$vit_moins30,50)
-      vitesse30 <- apply(vitesse30,1,mean)
-      vitesse30 <- 100-vitesse30
-      vitesse40 <- embed(tableau_temp$vit_moins40,50)
-      vitesse40 <- apply(vitesse40,1,mean)
-      vitesse40 <- 100-vitesse40
-      # Réalisation des abcisses
-      vehicule <- embed(tableau_temp$vehic,50)
-      vehicule <- apply(vehicule,1,mean)
-      VehG <- rep(vehicule,4)
-      # Préparation du tableau pour le graphique
-      Vitesse <- c(vitesse10,vitesse20,vitesse30,vitesse40)
-      k=length(vehicule)
-      Leg <- c(rep("Plus de 10km/h",k),rep("Plus de 20km/h",k),rep("Plus de 30km/h",k),rep("Plus de 40km/h",k))
-      donnee <- tibble(VehG,Vitesse,Leg)
-      # Récupération des courbes lissées à partir de la méthode smooth de R
-      p <- ggplot(donnee)+aes(x=VehG, y=Vitesse, color = Leg, group=Leg)+stat_smooth()
-      y <- ggplot_build(p)$data[[1]][,1:3]
-      # Création du tableau pour stocké les données
-      Donnee <- NULL 
-      for(i in levels(as.factor(y$colour))){
-        Donnee <- bind_cols(Donnee,y[y$colour==i,-1])
-      }
-      X=Donnee[,1]
-      Y=Donnee[,c(2,4,6,8)]
-      Y <- t(t(Y)[order(t(Y)[,1]),]) # Rangement des colonnes par vitesse
-      Donnee <- as.data.frame(bind_cols(X,Y))
-      # Calcul des seuils pour chaque courbes à partir d'un test de Darling Erdos
-      res2 <- NULL
-      if(input$vit=="Toute"){
-        for(i in c(2:5)){
-          tt <- DE.test(Donnee[,i]) # Darling-Erdos
-          x <- Donnee[tt$estimate,1]
-          res2 <- c(res2,x)
-          moyenne <- mean(res2)
-        }
-      }else{
-        D <- c("plus de 40km/h","plus de 30km/h","plus de 20km/h","plus de 10km/h")
-        ind <- which(D==input$vit)
-        tt <- DE.test(Donnee[,ind+1])
-        x <- Donnee[tt$estimate,1]
-        moyenne <- x
-      }
-      # Préparation de l'indexation de l'abscisse
-      mmV <- max(donnee$VehG)
-      if(mmV<100){
-        absi <- seq(0,100,10)
-        absi_1 <- absi[absi<moyenne]
-        absi_2 <- absi[absi>moyenne]
-      }else{
-        if(mmV<500){
-          absi <- seq(0,500,50)
-          absi_1 <- absi[absi<moyenne]
-          absi_2 <- absi[absi>moyenne]
-          
-        }else{
-          maxi <- floor(mmV/100)*100
-          absi <- seq(0,maxi,100)
-          absi_1 <- absi[absi<moyenne]
-          absi_2 <- absi[absi>moyenne]
-          
-        }
-      }
-      
-      # Graphique du seuil
-      ggplot(donnee)+aes(x=VehG, y=Vitesse, color = Leg, group=Leg)+geom_line(color="black")+
-        geom_smooth()+labs(x="Nombre de véhicules sur une tranche horaire", y = "Pourcentage de véhicule dépassant la vitesse données")+
-        ggtitle("Evolution de la vitesse de conduite selon le nombre d'usagers")+
-        geom_vline(xintercept=moyenne,color="red", size = 1.5)+
-        scale_x_continuous(breaks=c(absi_1,moyenne,absi_2), labels=c(absi_1,round(moyenne),absi_2))
-    })
+      plot_seuil_graph()
   })
   
+  output$downloadbrut <- downloadHandler(
+    filename = "Courbes_brutes.csv", # Nom du fichier importé
+    content = function(file) {
+      write_excel_csv2(plot_seuil_prep()$Donnees$Courbes_brute, file)
+    }
+  )
   
+  
+  output$downloadlisse <- downloadHandler(
+    filename = "Courbes_lissées.csv", # Nom du fichier importé
+    content = function(file) {
+      write_excel_csv2(plot_seuil_prep()$Donnees$Courbes_lissees, file)
+    }
+  )
   
   
 ################################################################################################################# 
@@ -974,7 +1142,7 @@ shinyServer(function(session,input, output) {
         # Graphique non normé
         g <- ggplot()+geom_line(aes(x=X,y=Y,col=Capteur))+labs(title = "Tendance",
                                                                x = "Date",
-                                                               y="")
+                                                               y="Variation en nombre de véhicules")
       }
       
       g
@@ -993,10 +1161,20 @@ shinyServer(function(session,input, output) {
       # Reconstruction du nom des capteurs et du sens
       cap1 <- paste(input$capteur1,input$sens1,sep="_")
       cap2 <- paste(input$capteur2,input$sens2,sep="_")
+      # Vecteur des jours de la semaine
+      jours <- c("lundi","mardi","mercredi","jeudi","vendredi","samedi","dimanche")
+      # Récupération des valeurs par jour:
+      week1 <- NULL
+      week2 <- NULL
+      for(i in 1:7){
+        week1 <- c(week1,Tableau$C1$cycle[wday(Date)==i][1])
+        week2 <- c(week2,Tableau$C2$cycle[wday(Date)==i][1])
+      }
+      
       if(input$Norm1=="Oui"){# Construction du graphique pour le choix normé
-        cycle_1 <- scale(Tableau$C1$cycle) # Normalisation du cycle pour le capteur 1
-        cycle_2 <- scale(Tableau$C2$cycle) # Normalisation du cycle pour le capteur 2
-        X <- c(Date,Date)
+        cycle_1 <- scale(week1) # Normalisation du cycle pour le capteur 1
+        cycle_2 <- scale(week2) # Normalisation du cycle pour le capteur 2
+        X <- c(1:7,1:7)
         Y <- c(cycle_1,cycle_2)
         Capteur <- c(rep(cap1,length(cycle_1)),rep(cap2,length(cycle_1)))
         
@@ -1005,18 +1183,20 @@ shinyServer(function(session,input, output) {
                                                                y="")+
           theme(
             axis.text.y = element_blank(),
-            axis.ticks.y = element_blank())
+            axis.ticks.y = element_blank())+
+          scale_x_continuous(breaks = 1:7, label=jours)
       }
       if(input$Norm1=="Non"){ # Construction du graphique pour le choix non normé
-        cycle_1 <- Tableau$C1$cycle # Récupération du cycle de la courbe 1
-        cycle_2 <- Tableau$C2$cycle # Récupération du cycle de la courbe 2
-        X <- c(Date,Date)
+        cycle_1 <- week1 # Récupération du cycle de la courbe 1
+        cycle_2 <- week2 # Récupération du cycle de la courbe 2
+        X <- c(1:7,1:7)
         Y <- c(cycle_1,cycle_2)
         Capteur <- c(rep(cap1,length(cycle_1)),rep(cap2,length(cycle_1)))
         
         g <- ggplot()+geom_line(aes(x=X,y=Y,col=Capteur))+labs(title = "Cycle",
                                                                x = "Date",
-                                                               y="")
+                                                               y="Variation en nombre de véhicules")+
+          scale_x_continuous(breaks = 1:7,  label = jours)
       }
       g
     })
@@ -1057,7 +1237,7 @@ shinyServer(function(session,input, output) {
         Don <- bind_cols(X,Y,Capteur)
         g <- ggplot(Don)+geom_line(aes(x=X,y=Y,col=Capteur))+labs(title = "Bruit",
                                                                   x = "Date",
-                                                                  y ="")
+                                                                  y ="Variation en nombre de véhicules")
       }
       g
     })
@@ -1065,7 +1245,7 @@ shinyServer(function(session,input, output) {
   
   # Coefficient de corrélation de Pearson pour le bruit
   
-  output$correlation <- renderText({
+  output$correlation <- renderUI({
     input$mise_a_j3 #Pour conditionner la mise à jour
     isolate({
       # Récupération des données traitées
@@ -1074,33 +1254,77 @@ shinyServer(function(session,input, output) {
       bruit_2 <- scale(Tableau$C2$bruit)# Normalisation du bruit pour le capteur 2
       correl <- round(cor(bruit_1,bruit_2,use = "na.or.complete"),3) # Coefficient de correlation de Pearson 
       
-      paste("Coefficient de correlation de Pearson :",correl) # Fabrication du texte pour l'affichage
+      ligne1 <- paste("Coefficient de correlation :",correl) # Fabrication du texte pour l'affichage
+      if(correl>0.5){
+        ligne2 <- "C'est une valeur élevée, les deux courbes sont corrélées "
+      }
+      if(correl<=0.5){
+        ligne2 <- "C'est une valeur moyenne, les deux courbes sont légèrement corrélées "
+      }
+      if(correl<0.2){
+        ligne2 <- "C'est une valeur faible, les deux courbes ne sont pas corrélées "
+      }
+      HTML(paste(ligne1,ligne2,sep="<br/>"))
     })
   })
   
   
   # Coefficient de synchronicité des pics pour le bruit
   
-  output$pics <- renderText({
+  output$pics <- renderUI({
     input$mise_a_j3 #Pour conditionner la mise à jour
     isolate({
       # Récupération des données traitées
       Tableau <- Compar_tabl2()
       bruit_1 <- na.trim(scale(Tableau$C1$bruit))# Normalisation du bruit pour le capteur 1
       bruit_2 <- na.trim(scale(Tableau$C2$bruit))# Normalisation du bruit pour le capteur 2
-      pic <- round(peaks(bruit_1,bruit_2)$obs,3) # Test de synchronicité des pics
-      
-      paste("Taux de synchronicité des pics :",pic) # Fabrication du texte pour l'affichage
+      # Test de synchronicité des pics (on récupère la pvalue calculé à partir de 100 tirage)
+      picVal <- peaks(bruit_1,bruit_2,nrands = 100)$pval 
+      pic <- round(peaks(bruit_1,bruit_2)$obs,3)
+      ligne1 <- paste("Taux de synchronicité des pics :",pic) # Fabrication du texte pour l'affichage
+      if(picVal<0.05){
+        ligne2 <- "Les pics des deux courbes sont atteints en même temps très souvent."
+      }else{
+        ligne2 <- "On ne peut pas dire que les pics des deux courbes sont souvent atteints en même temps."
+      }
+      HTML(paste(ligne1,ligne2,sep="<br/>"))
     })
   }) 
   
-  
+  # Import
   output$downloadData2 <- downloadHandler(
     filename = "Comparaison_capteur.csv", # Nom du fichier importé
     content = function(file) {
-      write.csv(prep_tabl2(), file, row.names = FALSE,fileEncoding = "UTF-8")
+      write_excel_csv2(prep_tabl2(), file)
     }
   )
+  
+################################################################################################################# 
+  
+#######  
+  
+# Onglet Heure d'engorgement
+  
+#######
+  
+  
+  # Graphique 
+  
+  output$plot_heure_eng <- renderPlotly({
+    
+    plot_eng_react()$fig
+    
+  }) 
+  
+  
+  # Import
+  output$downloadHeure <- downloadHandler(
+    filename = "Heure_engorgement.csv", # Nom du fichier importé
+    content = function(file) {
+      write_excel_csv2(plot_eng_react()$Donnee, file)
+    }
+  )
+  
   
   
   
@@ -1120,7 +1344,7 @@ shinyServer(function(session,input, output) {
       "Import à faire"
       }
     }else{
-      "Done"
+      "Fait"
     }
   )
   
@@ -1209,7 +1433,7 @@ shinyServer(function(session,input, output) {
   output$OutBox13 = renderUI(
     if (is.null(liste_capteur())|mode(tableau_P1())=="character"|mode(tableau_P2())=="character"|length(input$SM1)==0|length(input$SM2)==0){return()
     }else{
-      h2("Compapraison avec la première période")
+      h2("Comparaison avec la première période")
     }
   )
   
@@ -1217,10 +1441,21 @@ shinyServer(function(session,input, output) {
   output$OutBox14 = renderUI(
     if (is.null(liste_capteur())|mode(tableau_P1())=="character"|mode(tableau_P3())=="character"|length(input$SM1)==0|length(input$SM3)==0){return()
     }else{
-      h2("Compapraison avec la seconde période")
+      h2("Comparaison avec la seconde période")
     }
   )
   
+  # Affiche la remarque pour l'interprttaion des test si tout va bien.
+  output$OutBox15 = renderUI(
+    if (is.null(liste_capteur())|mode(tableau_P1())=="character"|mode(tableau_P3())=="character"|length(input$SM1)==0|length(input$SM3)==0){return()
+    }else{
+      HTML("(*) Remarques relatives à la significativité de la différence de comportement : <br/>
+      Pour chaque créneau horaire, la couleur indique s'il y a un comportement différent des usagers entre les deux périodes.
+      Si le résultat est <i>Significatif</i>, c'est qu'il y a très probablement un changement de comportement entre les deux périodes (pour l'heure concernée).
+      Si le résultat est <i>Entre deux</i>, alors il est possible qu'il y ait une différence.
+      Si le résultat est <i>Non-significatif</i>, on ne peut pas dire qu'il y ait une différence.")
+    }
+  )
   
 ################################################################################################################# 
   
@@ -1240,6 +1475,18 @@ shinyServer(function(session,input, output) {
                        selected = liste_capteur()[1])}
   )
   
+  output$Box6= renderUI(
+    if(is.null(donnee_import()$donnee)){return()
+    }else{
+      if (length(Tabl_Engor()[,1])<100 ){return()
+      }else{
+        if (input$calcul_seuil == "manuel")
+        sliderInput("seuil", "Valeur du seuil", round(min(plot_seuil_prep_1()$vehicule,na.rm=TRUE)),
+                    round(max(plot_seuil_prep_1()$vehicule,na.rm=TRUE)), 
+                    floor(max(plot_seuil_prep_1()$vehicule,na.rm=TRUE)), step = 1, round = FALSE)
+      }}
+  )
+  
   # Permet de demander l'import s'il na pas été fait
     output$OutBox2 = renderUI(
     if (is.null(donnee_import()$donnee)){return("Import necessaire")
@@ -1254,6 +1501,24 @@ shinyServer(function(session,input, output) {
     }
   )
   
+  output$OutBox17 = renderUI(
+    if(is.null(donnee_import()$donnee)){return()
+      }else{
+    if (length(Tabl_Engor()[,1])<100 ){return()
+    }else{
+      downloadButton("downloadbrut", "Import des données des courbes brutes (noire)")
+      }}
+  )
+  
+  output$OutBox18= renderUI(
+    if(is.null(donnee_import()$donnee)){return()
+    }else{
+      if (length(Tabl_Engor()[,1])<100 ){return()
+      }else{
+        downloadButton("downloadlisse", "Import des données des courbes lissées")
+      }}
+  )
+   
 ################################################################################################################# 
   
 #######  
@@ -1290,9 +1555,6 @@ shinyServer(function(session,input, output) {
       uiOutput("OutBox3_bis")
     }
   )
-  
-  
-  
   
   
   # Permet d'afficher un message d'erreur s'il n'y a pas assez de données
@@ -1339,7 +1601,7 @@ shinyServer(function(session,input, output) {
   # N'affiche rien si il n'y a pas assez de données
   output$OutBox6_bis = renderUI(
     if (mode(Compar_tabl())=="character"){return()
-    }else{textOutput("correlation")} #Sinon affiche le taux de correlation
+    }else{htmlOutput("correlation")} #Sinon affiche le taux de correlation
   )
   # N'affiche rien si l'import n'a pas été fait
   output$OutBox7 = renderUI(
@@ -1351,7 +1613,7 @@ shinyServer(function(session,input, output) {
   # N'affiche rien si il n'y a pas assez de données
   output$OutBox7_bis = renderUI(
     if (mode(Compar_tabl())=="character"){return()
-    }else{textOutput("pics")} #Sinon affiche le taux de synchronicité des pics
+    }else{htmlOutput("pics")} #Sinon affiche le taux de synchronicité des pics
   )
   
   #Permet d'afficher le bouton d'import si toutes les conditions sont bonnes
@@ -1363,10 +1625,43 @@ shinyServer(function(session,input, output) {
     }
   )
   
+################################################################################################################# 
+  
+#######  
+  
+# Onglet Heure d'engorgement
+  
+#######  
+  
+  # Permet de faire apparaitre la liste de capteur parmis lesquelles l'utilisateur peut choisir après l'import
+  output$Box5 = renderUI(
+    if (is.null(input$Capteurs)){return()
+    }else selectInput( "capteur4", 
+                       label = "Choix du capteur", 
+                       choices = input$Capteurs,
+                       selected = input$Capteurs[1])
+  )
+  
+  # Permet de demander l'import s'il na pas été fait, affiche le graphique si l'import est bon
+  output$OutBox16 = renderUI(
+    if (is.null(donnee_import()$donnee)){return("Import necessaire")
+    }else{
+      if (mode(plot_eng_react())=="character"){return(plot_eng_react())
+      }else{plotlyOutput("plot_heure_eng")}
+    }
+  )
+  
+  # Affiche le bouton de téléchargement des données si tout va bien
+  output$OutBox19 = renderUI(
+    if (is.null(donnee_import()$donnee)){return()
+    }else{
+      if(mode(plot_eng_react())=="character"){return()
+      }else{downloadButton("downloadHeure", "Import des données")}
+    }
+  )
+  
   
 })
-
-
 
 
 
