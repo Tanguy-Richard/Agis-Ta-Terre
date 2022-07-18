@@ -99,7 +99,7 @@ shinyUI(
                      choiceValues = c("car","heavy","pedestrian","bike")
                    ),
                    actionButton("mise_a_j", "Mettre à jour"),
-                   h2("Periode de référence"),
+                   h2(span(style="color:#006bb6","Periode de référence")),
                    dateRangeInput("daterange1", "Période",
                                   start  = "2021-01-01",
                                   end    = Sys.Date()-days(1),
@@ -117,7 +117,7 @@ shinyUI(
                      choiceValues = 1:7,
                      inline = TRUE
                    ),
-                   h2("Première période de comparaison "),
+                   h2(span(style="color:#ff5900","Première période de comparaison ")),
                    dateRangeInput("daterange2", "Période",
                                   start  = "2021-01-01",
                                   end    = Sys.Date()-days(1),
@@ -135,7 +135,7 @@ shinyUI(
                      choiceValues = 1:7,
                      inline = TRUE
                    ),
-                   h2("Seconde période de comparaison"),
+                   h2(span(style="color:#00b308","Seconde période de comparaison")),
                    dateRangeInput("daterange4", "Période",
                                   start  = "2021-01-01",
                                   end    = Sys.Date()-days(1),

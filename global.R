@@ -71,9 +71,6 @@ key = "UZiPH7KKBY1TS4wqAV8LHaXbN2FlBDlp7s5aXTcV"
 
 # (importe sur 25 ans : 285 jours)
 # Récupération des jours au format: "YYYY-MM-DD"
-# Jours <- names(fromJSON(rawToChar(GET("https://calendrier.api.gouv.fr/jours-feries/metropole.json")$content)))
-# # Mise au format date de lubridate
-# JoursFeries <- ymd(Jours)
 
 JoursFeries <- GET("https://calendrier.api.gouv.fr/jours-feries/metropole.json") %>% 
   .$content %>% 
@@ -88,15 +85,6 @@ JoursFeries <- GET("https://calendrier.api.gouv.fr/jours-feries/metropole.json")
 #récupération des donnees specification de l'academie dans location (a changer si changement d'academie).
 
 url = "https://data.education.gouv.fr/api/v2/catalog/datasets/fr-en-calendrier-scolaire/exports/json"
-# Vac <-  GET(url, query = list(refine = "location:Rennes",
-#                               exclude = "population:Enseignants"))
-# Vacances <- fromJSON(rawToChar(Vac$content))
-# # selection des colonnes: nom, debut et fin
-# Vacances <- Vacances[,c("description","start_date","end_date")]
-# # Passage en format date de lubridate, creation d'un interval pour la methode within
-# Vacances$start_date <- ymd_hms(Vacances$start_date)
-# Vacances$end_date <- ymd_hms(Vacances$end_date)
-# Vacances$interval <- interval(Vacances$start_date,Vacances$end_date)
 
 Vacances <- GET(
   url = url,
@@ -129,31 +117,6 @@ Vacances <- GET(
 ########################
 
 # Dates <- function(date1, date2) {
-#   #recuperation des dates au bon format
-#   dat1 = ymd_hms(date1)
-#   dat2 = ymd_hms(date2)
-#   #date de stockage temporaire de debut et de fin
-#   date_temp = dat1
-#   date_suiv = date_temp + months(3) - seconds(1)
-#   #liste stockant les dates de debut et de fin
-#   date_debut = c(date_temp)
-#   date_fin = c(date_temp + months(3) - seconds(1))
-#   
-#   
-#   #on recommence tant que la derniere date de fin enregistrer et avant la derniere date souhaitee
-#   while (date_suiv < dat2) {
-#     date_temp = ymd_hms(date_temp) + months(3) #on rajoute alors 3 mois
-#     date_suiv = ymd_hms(date_suiv) + months(3) #on rajoute alors 3 mois
-#     
-#     date_debut = c(date_debut, date_temp) #on enregistre dans les listes
-#     date_fin = c(date_fin, date_suiv) #on enregistre dans les listes
-#   }
-#   
-#   #retour sous la forme d'un data frame avec une colonne debut et  une fin
-#   return(data.frame(debut = date_debut,
-#                     fin = date_fin))
-# }
-
 #' Découper une période en "tranches" de 3 mois
 #'
 #' @param date1 Caractère. Date de début au format "aaaa-mm-jj hh:mm:ss"
@@ -188,8 +151,20 @@ Dates <- function(date1, date2)
 ########################
 # Fonction de test d'appartenance d'une date a une liste d'intervals lubridate
 ########################
-# entree : une date (format lubridate) et une liste d'intervals lubridate
-# sortie : un booleen
+#' Test d'appartenance d'une date a une liste d'intervals lubridate
+#'
+#' @param date Date au format lubridate 
+#' @param Liste_interval Liste d'intervals lubridate
+#'
+#' @return Un booléen indiquant si la date appartient ou pas à la liste d'interval
+#' @export 
+#'
+#' @examples
+#' date <- ymd_hms("2021/01/01 00:00:00")
+#' interval1 <- interval("2020/11/02 00:00:00","2021/03/01 00:00:00")
+#' interval2 <- interval("2022/02/01 00:00:00","2021/04/01 00:00:00")
+#' Liste_interval = c(interval1, interval2)
+#' Test_date(date,Liste_interval)
 
 Test_date <- function(date, Liste_interval){
   return(sum(date %within% Liste_interval) > 0)
@@ -198,9 +173,15 @@ Test_date <- function(date, Liste_interval){
 ########################
 # Fonction de selection de date (dans une liste d'interval)
 ########################
-# entree : un dataframe avec une colonne "date" (format lubridate) et une liste d'intervals lubridate
-# sortie : le data frame des lignes correspondants aux intervals et un dataframe complementaire
-# sous la forme d'une liste a 2 elements: data1 et data2
+#' Filtrage sur l'appartenance à une liste de périodes d'un dataframe
+#'
+#' @param Donnees un dataframe avec une colonne "date" (format lubridate) 
+#' @param Liste_interval une liste d'intervals lubridate
+#'
+#' @return Le data frame des lignes correspondants aux intervals et un dataframe complementaire 
+#' sous la forme d'une liste a 2 elements: data1 et data2
+#' @export
+#'
 
 Selection_Date <- function(Donnees, Liste_interval){
   Valeurs_Bool = unlist(lapply(Donnees$date, FUN = function(x){Test_date(x,Liste_interval)}))
@@ -216,15 +197,15 @@ Selection_Date <- function(Donnees, Liste_interval){
 ########################
 
 
-#' Title
+#' Filtrage sur l'appartenance à une liste de dates d'un dataframe
 #'
-#' @param Donnees 
-#' @param Liste_date 
+#' @param Donnees un dataframe avec une colonne "date" (format lubridate)  
+#' @param Liste_date une liste de dates lubridate
 #'
-#' @return
+#' @returnLe data frame des lignes correspondants aux dates et un dataframe complementaire 
+#' sous la forme d'une liste a 2 elements: data1 et data2
 #' @export
 #'
-#' @examples
 Selection_Date2=function(Donnees,Liste_date){
   Valeurs_Bool = unlist(lapply(Donnees$date, FUN = function(x){
     date(x) %in% Liste_date}))
@@ -237,6 +218,15 @@ Selection_Date2=function(Donnees,Liste_date){
 # Séparation de la tendance, du cycle et du bruit
 #########################
 
+#' Séparation d'un signal en 3 part ( tendance, cycle hebdomadaire et bruit statistique)
+#'
+#' @param tableau Un dataframe avec une colonne "date" (format lubridate) et une colonne cible
+#' @param col Nom de la colonne cible
+#' @param model un modèle (multiplicatif ou additif) pour la séparation
+#'
+#' @return une liste de 3 vecteurs: la tendance, le cycle hebdomadaire et le bruit statistique
+#' @export
+#'
 desaisonalite=function(tableau,col,model){
   tendance <- as.vector(ma(tableau[,col],order = 14))
   if(model=="mult"){
