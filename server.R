@@ -61,11 +61,11 @@ shinyServer(function(session,input, output) {
   
   donnee_import <- reactive({
     
-    
-    input$go_import #Pour conditionner la mise à jour
-    isolate({
       
     listres <- list(geomet = NULL, donnee = NULL)
+    input$go_import #Pour conditionner la mise à jour
+    isolate({
+    
     
     try({
       
@@ -893,7 +893,8 @@ shinyServer(function(session,input, output) {
       labs(x="Heure", y = "Nombre moyen d'usagers")+
       geom_ribbon(aes(ymin=Born1, ymax=Born2, fill = Periode), linetype = "blank",alpha = 1/4)+
       ggtitle(ord_txt())+scale_x_continuous(breaks=heure,limits = c(heure[1]-0.5,heure[k]+0.5))+
-      expand_limits(y = 0)
+      expand_limits(y = 0) + scale_color_manual(values=c("#ff5900","#006bb6" ))+
+      scale_fill_manual(values=c("#ff5900","#006bb6" ))
     
     # Création du vecteur qui va servir à stocker les valeurs des test de Wilcoxon
     Stat_wilcox <- NULL
@@ -992,7 +993,8 @@ shinyServer(function(session,input, output) {
       labs(x="Heure", y = "Nombre moyen d'usagers")+
       geom_ribbon(aes(ymin=Born1, ymax=Born2, fill = Periode), linetype = "blank",alpha = 1/4)+
       ggtitle(ord_txt())+scale_x_continuous(breaks=heure,limits = c(heure[1]-0.5,heure[k]+0.5))+
-      expand_limits(y = 0)
+      expand_limits(y = 0) + scale_color_manual(values=c("#00b308", "#006bb6")) +
+      scale_fill_manual(values=c("#00b308","#006bb6" ))
     
     # Création du vecteur qui va servir à stocker les valeurs des test de Wilcoxon
     Stat_wilcox <- NULL

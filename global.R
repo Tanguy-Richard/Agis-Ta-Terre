@@ -104,6 +104,18 @@ Vacances$interval <- interval(Vacances$start_date,Vacances$end_date)
 # Découpe d'un interval de 2 date en bout de 3 mois (capacité d'import maximal de l'API de telraam)
 ########################
 
+#' Séparation d'une période en bout de 3 mois pour l'import de Telraam
+#'
+#' @param date1 date de début au format "YYYY/MM/DD HH:MM:SS"
+#' @param date2 date de fin au format "YYYY/MM/DD HH:MM:SS"
+#'
+#' @return un dataframe à 2 colones une recensant les dates de début des périodes
+#' de 3 mois eu une recensant les dates de fins 
+#' @export
+#'
+#' @examples
+#' Dates("2021/01/01 00:00:00","2022/06/06 00:00:00")
+#' 
 Dates=function(date1,date2){
   #recuperation des dates au bon format
   dat1=ymd_hms(date1) 
@@ -118,9 +130,8 @@ Dates=function(date1,date2){
   
   #on recommence tant que la derniere date de fin enregistrer et avant la derniere date souhaitee
   while(date_suiv < dat2){ 
-    date_temp = ymd_hms(date_temp) + months(3) #on rajoute alors 3 mois
-    date_suiv = ymd_hms(date_suiv) + months(3) #on rajoute alors 3 mois
-    
+    date_temp = date_temp + months(3) #on rajoute alors 3 mois
+    date_suiv = date_temp + months(3) - seconds(1) #on rajoute alors 3 mois
     date_debut = c(date_debut,date_temp) #on enregistre dans les listes
     date_fin = c(date_fin,date_suiv) #on enregistre dans les listes
   }
@@ -133,8 +144,21 @@ Dates=function(date1,date2){
 ########################
 # Fonction de test d'appartenance d'une date a une liste d'intervals lubridate
 ########################
-# entree : une date (format lubridate) et une liste d'intervals lubridate
-# sortie : un booleen
+
+
+#' Test d'appartenance d'une date a une liste d'intervals lubridate
+#'
+#' @param date Date au format lubridate 
+#' @param Liste_interval Liste d'intervals lubridate
+#'
+#' @return Un booléen indiquant si la date appartient ou pas à la liste d'interval
+#' @export 
+#'
+#' @examples
+#' date=ymd_hms("2021/01/01 00:00:00")
+#' Liste_interval = c(interval("2020/11/02 00:00:00","2021/03/01 00:00:00"), interval("2022/02/01 00:00:00","2021/04/01 00:00:00"))
+#' Test_date(date,Liste_interval)
+
 
 Test_date=function(date,Liste_interval){
   return(sum(date %within% Liste_interval)>0)
@@ -143,10 +167,16 @@ Test_date=function(date,Liste_interval){
 ########################
 # Fonction de selection de date (dans une liste d'interval)
 ########################
-# entree : un dataframe avec une colonne "date" (format lubridate) et une liste d'intervals lubridate
-# sortie : le data frame des lignes correspondants aux intervals et un dataframe complementaire
-# sous la forme d'une liste a 2 elements: data1 et data2
 
+#' Filtrage sur l'appartenance à une liste de périodes d'un dataframe
+#'
+#' @param Donnees un dataframe avec une colonne "date" (format lubridate) 
+#' @param Liste_interval une liste d'intervals lubridate
+#'
+#' @return Le data frame des lignes correspondants aux intervals et un dataframe complementaire 
+#' sous la forme d'une liste a 2 elements: data1 et data2
+#' @export
+#'
 Selection_Date=function(Donnees,Liste_interval){
   Valeurs_Bool = unlist(lapply(Donnees$date, FUN = function(x){Test_date(x,Liste_interval)}))
   data1 = Donnees[Valeurs_Bool,]
@@ -160,15 +190,15 @@ Selection_Date=function(Donnees,Liste_interval){
 ########################
 
 
-#' Title
+#' Filtrage sur l'appartenance à une liste de dates d'un dataframe
 #'
-#' @param Donnees 
-#' @param Liste_date 
+#' @param Donnees un dataframe avec une colonne "date" (format lubridate)  
+#' @param Liste_date une liste de dates lubridate
 #'
-#' @return
+#' @returnLe data frame des lignes correspondants aux dates et un dataframe complementaire 
+#' sous la forme d'une liste a 2 elements: data1 et data2
 #' @export
 #'
-#' @examples
 Selection_Date2=function(Donnees,Liste_date){
   Valeurs_Bool = unlist(lapply(Donnees$date, FUN = function(x){
     date(x) %in% Liste_date}))
@@ -181,6 +211,15 @@ Selection_Date2=function(Donnees,Liste_date){
 # Séparation de la tendance, du cycle et du bruit
 #########################
 
+#' Séparation d'un signal en 3 part ( tendance, cycle hebdomadaire et bruit statistique)
+#'
+#' @param tableau Un dataframe avec une colonne date et une colonne cible
+#' @param col Nom de la colonne cible
+#' @param model un modèle (multiplicatif ou additif) pour la séparation
+#'
+#' @return une liste de 3 vecteurs: la tendance, le cycle hebdomadaire et le bruit statistique
+#' @export
+#'
 desaisonalite=function(tableau,col,model){
   tendance <- as.vector(ma(tableau[,col],order = 14))
   if(model=="mult"){
