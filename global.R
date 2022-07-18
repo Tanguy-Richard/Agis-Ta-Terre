@@ -71,9 +71,16 @@ key = "UZiPH7KKBY1TS4wqAV8LHaXbN2FlBDlp7s5aXTcV"
 
 # (importe sur 25 ans : 285 jours)
 # Récupération des jours au format: "YYYY-MM-DD"
-Jours <- names(fromJSON(rawToChar(GET("https://calendrier.api.gouv.fr/jours-feries/metropole.json")$content)))
-# Mise au format date de lubridate
-JoursFeries <- ymd(Jours)
+# Jours <- names(fromJSON(rawToChar(GET("https://calendrier.api.gouv.fr/jours-feries/metropole.json")$content)))
+# # Mise au format date de lubridate
+# JoursFeries <- ymd(Jours)
+
+JoursFeries <- GET("https://calendrier.api.gouv.fr/jours-feries/metropole.json") %>% 
+  .$content %>% 
+  rawToChar() %>% 
+  fromJSON() %>% 
+  names() %>% 
+  ymd()
 
 ### Import dates vacances ###
 
@@ -81,15 +88,32 @@ JoursFeries <- ymd(Jours)
 #récupération des donnees specification de l'academie dans location (a changer si changement d'academie).
 
 url = "https://data.education.gouv.fr/api/v2/catalog/datasets/fr-en-calendrier-scolaire/exports/json"
-Vac <-  GET(url, query = list(refine = "location:Rennes",
-                              exclude = "population:Enseignants"))
-Vacances <- fromJSON(rawToChar(Vac$content))
-# selection des colonnes: nom, debut et fin
-Vacances <- Vacances[,c("description","start_date","end_date")]
-# Passage en format date de lubridate, creation d'un interval pour la methode within
-Vacances$start_date <- ymd_hms(Vacances$start_date)
-Vacances$end_date <- ymd_hms(Vacances$end_date)
-Vacances$interval <- interval(Vacances$start_date,Vacances$end_date)
+# Vac <-  GET(url, query = list(refine = "location:Rennes",
+#                               exclude = "population:Enseignants"))
+# Vacances <- fromJSON(rawToChar(Vac$content))
+# # selection des colonnes: nom, debut et fin
+# Vacances <- Vacances[,c("description","start_date","end_date")]
+# # Passage en format date de lubridate, creation d'un interval pour la methode within
+# Vacances$start_date <- ymd_hms(Vacances$start_date)
+# Vacances$end_date <- ymd_hms(Vacances$end_date)
+# Vacances$interval <- interval(Vacances$start_date,Vacances$end_date)
+
+Vacances <- GET(
+  url = url,
+  query = list(refine = "location:Rennes",
+               exclude = "population:Enseignants")
+) %>%
+  .$content %>%
+  rawToChar() %>%
+  fromJSON() %>%
+  select(description,
+         start_date,
+         end_date) %>%
+  mutate(
+    start_date = ymd_hms(start_date),
+    end_date = ymd_hms(end_date),
+    interval = interval(start_date, end_date)
+  )
 # Remarque: les dates des vacance finissent vers 22h ou 23h -> cela ne changent rien au vu des heures
 # de fonctionnement des capteurs Telraam (ne fonctionne que s'il fait jour)
 
@@ -104,31 +128,62 @@ Vacances$interval <- interval(Vacances$start_date,Vacances$end_date)
 # Découpe d'un interval de 2 date en bout de 3 mois (capacité d'import maximal de l'API de telraam)
 ########################
 
-Dates=function(date1,date2){
-  #recuperation des dates au bon format
-  dat1=ymd_hms(date1) 
-  dat2=ymd_hms(date2)
-  #date de stockage temporaire de debut et de fin
-  date_temp = dat1
-  date_suiv = date_temp+months(3)-seconds(1)
-  #liste stockant les dates de debut et de fin
-  date_debut = c(date_temp)
-  date_fin = c(date_temp+months(3)-seconds(1))
-  
-  
-  #on recommence tant que la derniere date de fin enregistrer et avant la derniere date souhaitee
-  while(date_suiv < dat2){ 
-    date_temp = ymd_hms(date_temp) + months(3) #on rajoute alors 3 mois
-    date_suiv = ymd_hms(date_suiv) + months(3) #on rajoute alors 3 mois
-    
-    date_debut = c(date_debut,date_temp) #on enregistre dans les listes
-    date_fin = c(date_fin,date_suiv) #on enregistre dans les listes
-  }
-  
-  #retour sous la forme d'un data frame avec une colonne debut et  une fin
-  return(data.frame(debut = date_debut , fin = date_fin)) 
-}
+# Dates <- function(date1, date2) {
+#   #recuperation des dates au bon format
+#   dat1 = ymd_hms(date1)
+#   dat2 = ymd_hms(date2)
+#   #date de stockage temporaire de debut et de fin
+#   date_temp = dat1
+#   date_suiv = date_temp + months(3) - seconds(1)
+#   #liste stockant les dates de debut et de fin
+#   date_debut = c(date_temp)
+#   date_fin = c(date_temp + months(3) - seconds(1))
+#   
+#   
+#   #on recommence tant que la derniere date de fin enregistrer et avant la derniere date souhaitee
+#   while (date_suiv < dat2) {
+#     date_temp = ymd_hms(date_temp) + months(3) #on rajoute alors 3 mois
+#     date_suiv = ymd_hms(date_suiv) + months(3) #on rajoute alors 3 mois
+#     
+#     date_debut = c(date_debut, date_temp) #on enregistre dans les listes
+#     date_fin = c(date_fin, date_suiv) #on enregistre dans les listes
+#   }
+#   
+#   #retour sous la forme d'un data frame avec une colonne debut et  une fin
+#   return(data.frame(debut = date_debut,
+#                     fin = date_fin))
+# }
 
+#' Découper une période en "tranches" de 3 mois
+#'
+#' @param date1 Caractère. Date de début au format "aaaa-mm-jj hh:mm:ss"
+#' @param date2 Caractère. Date de fin au format "aaaa-mm-jj hh:mm:ss"
+#'
+#' @return Dataframe avec une ligne par période de 3 mois et deux colonnes "debut" et "fin"
+#' @export
+#'
+#' @examples
+#' date1 <- "2021-03-01 12:35:21"
+#' date2 <- "2022-07-01 03:15:33"
+#'
+#' test_df <- Dates(date1, date2) %>% 
+#'   mutate(intervalle = interval(debut, fin))
+#' 
+#' 
+Dates <- function(date1, date2)
+  
+{
+  
+  debut <- seq(from = ymd_hms(date1), 
+               to = ymd_hms(date2),
+               by = "3 month")
+  
+  fin <- debut + months(3)
+  
+  data.frame(debut,
+             fin)
+  
+}
 
 ########################
 # Fonction de test d'appartenance d'une date a une liste d'intervals lubridate
@@ -136,8 +191,8 @@ Dates=function(date1,date2){
 # entree : une date (format lubridate) et une liste d'intervals lubridate
 # sortie : un booleen
 
-Test_date=function(date,Liste_interval){
-  return(sum(date %within% Liste_interval)>0)
+Test_date <- function(date, Liste_interval){
+  return(sum(date %within% Liste_interval) > 0)
 }
 
 ########################
@@ -147,11 +202,12 @@ Test_date=function(date,Liste_interval){
 # sortie : le data frame des lignes correspondants aux intervals et un dataframe complementaire
 # sous la forme d'une liste a 2 elements: data1 et data2
 
-Selection_Date=function(Donnees,Liste_interval){
+Selection_Date <- function(Donnees, Liste_interval){
   Valeurs_Bool = unlist(lapply(Donnees$date, FUN = function(x){Test_date(x,Liste_interval)}))
   data1 = Donnees[Valeurs_Bool,]
   data2 = Donnees[!Valeurs_Bool,]
-  return(list(data1 = data1 ,data2 =data2))
+  return(list(data1 = data1,
+              data2 = data2))
 }
 
 
