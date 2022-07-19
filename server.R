@@ -62,7 +62,7 @@ shinyServer(function(session,input, output) {
   donnee_import <- reactive({
     
       
-    listres <- list(geomet = NULL, donnee = NULL)
+    list_resultat <- list(geomet = NULL, donnee = NULL)
     
     input$go_import #Pour conditionner la mise à jour
     isolate({
@@ -118,7 +118,7 @@ shinyServer(function(session,input, output) {
       dfgeo = rbind(dfgeo,id)
       
       #recuperation des listes de dates separees par maximum 3 mois (pour iterer lors de l'import)
-      dates = Dates(dateInf,dateSup)
+      dates = decouper_periode(dateInf,dateSup)
       
       #recuperation des donnees mesurees par le capteur
       for(i in 1:length(dates$debut)){
@@ -155,19 +155,19 @@ shinyServer(function(session,input, output) {
     }
     
     #################
-    # Selection des donnees non nuls
+    # Selection des donnees non nulles
     #################
     
-    donnees_nn <- dfglob[apply(dfglob[,6:17], MARGIN = 1, FUN = function(x){return(sum(x)!=0)}),]
-    donnees_nn <- donnees_nn[donnees_nn$uptime>0.5,]
+    donnees_non_nulles <- dfglob[apply(dfglob[,6:17], MARGIN = 1, FUN = function(x){return(sum(x)!=0)}),]
+    donnees_non_nulles <- donnees_non_nulles[donnees_non_nulles$uptime>0.5,]
     
-    listres <- list(geomet = dfgeo, donnee = donnees_nn)
+    list_resultat <- list(geomet = dfgeo, donnee = donnees_non_nulles)
     
     })
       
     })
     
-    listres
+    list_resultat
     
   })
   
@@ -185,170 +185,170 @@ shinyServer(function(session,input, output) {
   
   # Premiere sélection de tableau pour la comparaison de période 
   
-  tableau_travail <- reactive({ 
+  premier_filtre <- reactive({ 
     input$mise_a_j #Pour conditionner la mise à jour
     isolate({
     
-    donnees_nn_plus <- donnee_import()$donnee #récupération des données d'import
+    donnees <- donnee_import()$donnee #récupération des données d'import
     
     # Filtrage sur le capteur sélectionnée 
-    Tableau <- donnees_nn_plus[donnees_nn_plus$segment_id==input$capteur,]
+    donnees_filtrées <- donnees[donnees$segment_id==input$capteur,]
     
     
     # Filtrage sur le sens choisie 
     if(input$sens=="Toute"){
-      Tableau <- Tableau[,c("date","uptime","heavy","car","bike","pedestrian")]
+      donnees_filtrées <- donnees_filtrées[,c("date","uptime","heavy","car","bike","pedestrian")]
     }
     if(input$sens=="Rgt"){
-      Tableau <- Tableau[,c("date","uptime","heavy_rgt","car_rgt","bike_rgt","pedestrian_rgt")]
-      colnames(Tableau) <- c("date","uptime","heavy","car","bike","pedestrian")
+      donnees_filtrées <- donnees_filtrées[,c("date","uptime","heavy_rgt","car_rgt","bike_rgt","pedestrian_rgt")]
+      colnames(donnees_filtrées) <- c("date","uptime","heavy","car","bike","pedestrian")
     }
     if(input$sens=="Lft"){
-      Tableau <- Tableau[,c("date","uptime","heavy_lft","car_lft","bike_lft","pedestrian_lft")]
-      colnames(Tableau) <- c("date","uptime","heavy","car","bike","pedestrian")
+      donnees_filtrées <- donnees_filtrées[,c("date","uptime","heavy_lft","car_lft","bike_lft","pedestrian_lft")]
+      colnames(donnees_filtrées) <- c("date","uptime","heavy","car","bike","pedestrian")
     }
     
     # Filtrage sur la sélection de mobilités 
     if(length(input$mobilite)>1){
-      interet <- apply(Tableau[,input$mobilite], MARGIN = 1 ,FUN = sum)
-      Tableau$total <- interet
+      interet <- apply(donnees_filtrées[,input$mobilite], MARGIN = 1 ,FUN = sum)
+      donnees_filtrées$total <- interet
     }else{
-      Tableau$total <- Tableau[,input$mobilite]
+      donnees_filtrées$total <- donnees_filtrées[,input$mobilite]
     }
-    Tableau})
+    donnees_filtrées})
   })
   
   # Creation du tableau pour la periode de référence
   
   tableau_P1 <- reactive({ 
       # Récupération des données préfiltrées
-      Tableau <- tableau_travail()
+      donnees <- premier_filtre()
       
       # Test pour savoir si la sélection est vide
-      if(length(Tableau$date)==0){
-        Tableau="Selectionnez un capteur et au moins une mobilité, puis appuyez sur Mettre à jour"}else{
+      if(length(donnees$date)==0){
+        donnees="Selectionnez un capteur et au moins une mobilité, puis appuyez sur Mettre à jour"}else{
       
           
       # Sélection de la période temporelle
       date <- input$daterange1
       periode <- interval(ymd_hms(paste(date[1],"00:00:00")),ymd_hms(paste(date[2],"23:59:00")))
-      Tableau <- Selection_Date(Tableau,periode)$data1
+      donnees <- selection_date(donnees,periode)$donnees_correspondantes
       
       # Sélection des jours de toute la semaine
-      Tableau <- Tableau[wday(Tableau$date) %in% input$SM1 ,]
+      donnees <- donnees[wday(donnees$date) %in% input$SM1 ,]
       
-      if(length(Tableau$date)==0){ # Test pour savoir si la sélection est vide
-        Tableau <- "Pas de données pour la selection de la période de référence"
+      if(length(donnees$date)==0){ # Test pour savoir si la sélection est vide
+        donnees <- "Pas de données pour la selection de la période de référence"
       }else{ # Sélection de vacances
         if(input$Vacance1=="Non"){  
-          Tableau <- Selection_Date(Tableau,Vacances$interval)$data2
+          donnees <- selection_date(donnees,Vacances$interval)$donnees_complementaires
         }
         if(input$Vacance1=="Seulement les vacances"){
-          Tableau <- Selection_Date(Tableau,Vacances$interval)$data1
+          donnees <- selection_date(donnees,Vacances$interval)$donnees_correspondantes
         }
-        if(length(Tableau$date)==0){  # Test pour savoir si la sélection est vide
-          Tableau <- "Pas de données pour la selection de la période de référence"
+        if(length(donnees$date)==0){  # Test pour savoir si la sélection est vide
+          donnees <- "Pas de données pour la selection de la période de référence"
         }else{ # Sélection de jours fériés
           if(input$JF1=="Non"){
-            Tableau <- Selection_Date2(Tableau,JoursFeries)$data2
+            donnees <- selection_date2(donnees,JoursFeries)$donnees_complementaires
           }
           if(input$JF1=="Seulement les jours fériés"){
-            Tableau <- Selection_Date2(Tableau,JoursFeries)$data1
+            donnees <- selection_date2(donnees,JoursFeries)$donnees_correspondantes
           }
-          if(length(Tableau$date)==0){  # Test pour savoir si la sélection est vide
-            Tableau <- "Pas de données pour la selection de la période de référence"
+          if(length(donnees$date)==0){  # Test pour savoir si la sélection est vide
+            donnees <- "Pas de données pour la selection de la période de référence"
           }
         }
       }}
-      Tableau
+      donnees
   })
 
   # Creation du tableau pour la première periode de comparaison
   
   tableau_P2 <- reactive({ 
     # Récupération des données préfiltrées
-    Tableau <- tableau_travail()
+    donnees <- premier_filtre()
     
     # Test pour savoir si la sélection est vide
-    if(length(Tableau$date)==0){
-      Tableau=""}else{
+    if(length(donnees$date)==0){
+      donnees=""}else{
     
     # Sélection de la période temporelle
     date <- input$daterange2
     periode <- interval(ymd_hms(paste(date[1],"00:00:00")),ymd_hms(paste(date[2],"23:59:00")))
-    Tableau <- Selection_Date(Tableau,periode)$data1
+    donnees <- selection_date(donnees,periode)$donnees_correspondantes
     
     # Sélection des jours de toute la semaine
-    Tableau <- Tableau[wday(Tableau$date) %in% input$SM2 ,]
+    donnees <- donnees[wday(donnees$date) %in% input$SM2 ,]
     
-    if(length(Tableau$date)==0){# Test pour savoir si la sélection est vide
-      Tableau <- "Pas de données pour la selection de la première période de comparaison"
+    if(length(donnees$date)==0){# Test pour savoir si la sélection est vide
+      donnees <- "Pas de données pour la selection de la première période de comparaison"
     }else{ # Sélection de vacances
       if(input$Vacance2=="Non"){
-        Tableau <- Selection_Date(Tableau,Vacances$interval)$data2
+        donnees <- selection_date(donnees,Vacances$interval)$donnees_complementaires
       }
       if(input$Vacance2=="Seulement les vacances"){
-        Tableau <- Selection_Date(Tableau,Vacances$interval)$data1
+        donnees <- selection_date(donnees,Vacances$interval)$donnees_correspondantes
       }
-      if(length(Tableau$date)==0){ # Test pour savoir si la sélection est vide
-        Tableau <- "Pas de données pour la selection de la première période de comparaison"
+      if(length(donnees$date)==0){ # Test pour savoir si la sélection est vide
+        donnees <- "Pas de données pour la selection de la première période de comparaison"
       }else{ # Sélection de jours fériés
         if(input$JF2=="Non"){
-          Tableau <- Selection_Date2(Tableau,JoursFeries)$data2
+          donnees <- selection_date2(donnees,JoursFeries)$donnees_complementaires
         }
         if(input$JF2=="Seulement les jours fériés"){
-          Tableau <- Selection_Date2(Tableau,JoursFeries)$data1
+          donnees <- selection_date2(donnees,JoursFeries)$donnees_correspondantes
         }
-        if(length(Tableau$date)==0){ # Test pour savoir si la sélection est vide
-          Tableau <- "Pas de données pour la selection de la première période de comparaison"
+        if(length(donnees$date)==0){ # Test pour savoir si la sélection est vide
+          donnees <- "Pas de données pour la selection de la première période de comparaison"
         }
       }
     }}
-    Tableau
+    donnees
   })
   
   # Creation du tableau pour la seconde periode de comparaison
   
   tableau_P3 <- reactive({ 
     # Récupération des données préfiltrées
-    Tableau <- tableau_travail()
+    donnees <- premier_filtre()
     
     # Test pour savoir si la sélection est vide
-    if(length(Tableau$date)==0){
-      Tableau=""}else{
+    if(length(donnees$date)==0){
+      donnees=""}else{
         
         # Sélection de la période temporelle
         date <- input$daterange4
         periode <- interval(ymd_hms(paste(date[1],"00:00:00")),ymd_hms(paste(date[2],"23:59:00")))
-        Tableau <- Selection_Date(Tableau,periode)$data1
+        donnees <- selection_date(donnees,periode)$donnees_correspondantes
         
         # Sélection des jours de toute la semaine
-        Tableau <- Tableau[wday(Tableau$date) %in% input$SM3 ,]
+        donnees <- donnees[wday(donnees$date) %in% input$SM3 ,]
         
-        if(length(Tableau$date)==0){# Test pour savoir si la sélection est vide
-          Tableau <- "Pas de données pour la selection de la seconde période de comparaison"
+        if(length(donnees$date)==0){# Test pour savoir si la sélection est vide
+          donnees <- "Pas de données pour la selection de la seconde période de comparaison"
         }else{ # Sélection de vacances
           if(input$Vacance3=="Non"){
-            Tableau <- Selection_Date(Tableau,Vacances$interval)$data2
+            donnees <- selection_date(donnees,Vacances$interval)$donnees_complementaires
           }
           if(input$Vacance3=="Seulement les vacances"){
-            Tableau <- Selection_Date(Tableau,Vacances$interval)$data1
+            donnees <- selection_date(donnees,Vacances$interval)$donnees_correspondantes
           }
-          if(length(Tableau$date)==0){ # Test pour savoir si la sélection est vide
-            Tableau <- "Pas de données pour la selection de la seconde période de comparaison"
+          if(length(donnees$date)==0){ # Test pour savoir si la sélection est vide
+            donnees <- "Pas de données pour la selection de la seconde période de comparaison"
           }else{ # Sélection de jours fériés
             if(input$JF3=="Non"){
-              Tableau <- Selection_Date2(Tableau,JoursFeries)$data2
+              donnees <- selection_date2(donnees,JoursFeries)$donnees_complementaires
             }
             if(input$JF3=="Seulement les jours fériés"){
-              Tableau <- Selection_Date2(Tableau,JoursFeries)$data1
+              donnees <- selection_date2(donnees,JoursFeries)$donnees_correspondantes
             }
-            if(length(Tableau$date)==0){ # Test pour savoir si la sélection est vide
-              Tableau <- "Pas de données pour la selection de la seconde période de comparaison"
+            if(length(donnees$date)==0){ # Test pour savoir si la sélection est vide
+              donnees <- "Pas de données pour la selection de la seconde période de comparaison"
             }
           }
         }}
-    Tableau
+    donnees
   })
   
   
@@ -433,16 +433,16 @@ shinyServer(function(session,input, output) {
   
   Tabl_Engor <- reactive({
       #récupération des données d'import
-      Tableau <- donnee_import()$donnee
+      donnees <- donnee_import()$donnee
     
       # Sélection du capteur choisit par l'utilisateur
       Id = input$capteur3
-      tableau_temp <- Tableau[Tableau$segment_id==Id,]
+      donnees_temp <- donnees[donnees$segment_id==Id,]
       
       # Séléction de la période
       date <- input$daterange3
       periode <- interval(ymd_hms(paste(date[1],"00:00:00")),ymd_hms(paste(date[2],"23:59:00")))
-      Selection_Date(tableau_temp,periode)$data1
+      selection_date(donnees_temp,periode)$donnees_correspondantes
   })
   
   
@@ -630,13 +630,13 @@ shinyServer(function(session,input, output) {
   
   Compar_tabl <- reactive({ 
     
-    tableau <- donnee_import()$donnee #récupération des données d'imports
+    donnee <- donnee_import()$donnee #récupération des données d'imports
     
     # Filtrage sur les segments et l'heure sélectionnées
     segments=c(input$capteur1,input$capteur2)
     heure = input$heure
-    Seg1 <- tableau[tableau$segment_id==segments[1] & hour(tableau$date)==heure,]
-    Seg2 <- tableau[tableau$segment_id==segments[2] & hour(tableau$date)==heure,]
+    Seg1 <- donnee[donnee$segment_id==segments[1] & hour(donnee$date)==heure,]
+    Seg2 <- donnee[donnee$segment_id==segments[2] & hour(donnee$date)==heure,]
     # Jointure sur les dates communes
     tabjoin <- inner_join(Seg1,Seg2,by="date",suffix=c("1","2"))
     # Sélectioon du suffixe par rapport aux directions choisies
@@ -683,10 +683,10 @@ shinyServer(function(session,input, output) {
     Tableau <- Compar_tabl()
     cap1 <- paste(input$capteur1,input$sens1,sep="_") # Recreation du nom de la colonne du capteur 1
     cap2 <- paste(input$capteur2,input$sens2,sep="_") # Recreation du nom de la colonne du capteur 2
-    trait1 <- desaisonalite(Tableau,cap1,"add") # Séparation du signal en tendance, cycle et bruit (période 1)
-    trait2 <- desaisonalite(Tableau,cap2,"add") # Idem Période 2
+    traitment1 <- desaisonalite(Tableau,cap1,"add") # Séparation du signal en tendance, cycle et bruit (période 1)
+    traitment2 <- desaisonalite(Tableau,cap2,"add") # Idem Période 2
     
-    list(C1=trait1,C2=trait2) # Retour sous la forme d'une liste à 2 éléments
+    list(C1=traitment1,C2=traitment2) # Retour sous la forme d'une liste à 2 éléments
   
   })
   
@@ -731,54 +731,54 @@ shinyServer(function(session,input, output) {
   plot_eng_react <- reactive({
     
     #Séléction du capteur sélectionnée
-    don_1=subset(donnee_import()$donnee, segment_id==input$capteur4)
+    donnees_filtrees=subset(donnee_import()$donnee, segment_id==input$capteur4)
     
     #Séléction de la période
     date <- input$daterange5
     
     periode <- interval(ymd(date[1]),ymd(date[2]))
-    don_1=Selection_Date(don_1,periode)$data1
+    donnees_filtrees=selection_date(donnees_filtrees,periode)$donnees_correspondantes
     
-    if(length(don_1$date)==0){  # Test pour savoir si la sélection est vide
+    if(length(donnees_filtrees$date)==0){  # Test pour savoir si la sélection est vide
       "Pas de données pour la selection de la période"
     }else{
       if(input$Vacance4=="Non"){
-        don_1 <- Selection_Date(don_1,Vacances$interval)$data2
+        donnees_filtrees <- selection_date(donnees_filtrees,Vacances$interval)$donnees_complementaires
       }
       if(input$Vacance4=="Seulement les vacances"){
-        don_1 <- Selection_Date(don_1,Vacances$interval)$data1
+        donnees_filtrees <- selection_date(donnees_filtrees,Vacances$interval)$donnees_correspondantes
       }
-      if(length(don_1$date)==0){  # Test pour savoir si la sélection est vide
-        don_1 <- "Pas de données pour la selection de la période"
+      if(length(donnees_filtrees$date)==0){  # Test pour savoir si la sélection est vide
+        donnees_filtrees <- "Pas de données pour la selection de la période"
       }else{ # Sélection de jours fériés
         if(input$JF4=="Non"){
-          don_1 <- Selection_Date2(don_1,JoursFeries)$data2
+          donnees_filtrees <- selection_date2(donnees_filtrees,JoursFeries)$donnees_complementaires
         }
         if(input$JF4=="Seulement les jours fériés"){
-          don_1 <- Selection_Date2(don_1,JoursFeries)$data1
+          donnees_filtrees <- selection_date2(donnees_filtrees,JoursFeries)$donnees_correspondantes
         }
-        if(length(don_1$date)==0){  # Test pour savoir si la sélection est vide
+        if(length(donnees_filtrees$date)==0){  # Test pour savoir si la sélection est vide
           "Pas de données pour la selection de la période"
         }else{
     # Séléction des jours de la semaine
     jours <- input$SM4
     # Calcul des moyenne par créneau horaire
-    v=don_1%>%filter(wday(date) %in% jours)%>% group_by(hour(date)) %>% summarise(n=mean(v85,na.rm=TRUE))
-    colnames(v)=c("Heure", "Vitesse")
-    bu_rgt=don_1%>%filter(wday(date) %in% jours)%>% group_by(hour(date)) %>% summarise(n_rgt=mean(car_rgt+heavy_rgt,na.rm=TRUE))
-    colnames(bu_rgt)=c("Heure", "Voiture_BversA")
-    bu_lft=don_1%>%filter(wday(date) %in% jours)%>% group_by(hour(date)) %>% summarise(n_lft=mean(car_lft+heavy_lft,na.rm=TRUE))
-    colnames(bu_lft)=c("Heure", "Voiture_AversB")
+    vitesse=donnees_filtrees%>%filter(wday(date) %in% jours)%>% group_by(hour(date)) %>% summarise(n=mean(v85,na.rm=TRUE))
+    colnames(vitesse)=c("Heure", "Vitesse")
+    trafic_rgt=donnees_filtrees%>%filter(wday(date) %in% jours)%>% group_by(hour(date)) %>% summarise(n_rgt=mean(car_rgt+heavy_rgt,na.rm=TRUE))
+    colnames(trafic_rgt)=c("Heure", "Voiture_BversA")
+    trafic_lft=donnees_filtrees%>%filter(wday(date) %in% jours)%>% group_by(hour(date)) %>% summarise(n_lft=mean(car_lft+heavy_lft,na.rm=TRUE))
+    colnames(trafic_lft)=c("Heure", "Voiture_AversB")
     # Tableau final pour le graphique
-    bu = full_join(bu_lft, bu_rgt, by = "Heure")
-    bu = full_join(bu, v, by = "Heure")
+    trafic_horaire = full_join(trafic_lft, trafic_rgt, by = "Heure")
+    trafic_horaire = full_join(trafic_horaire, vitesse, by = "Heure")
     
-    if(length(bu$Heure)==0){ # Test pour savoir si la sélection est vide
+    if(length(trafic_horaire$Heure)==0){ # Test pour savoir si la sélection est vide
       "Pas de données pour la selection de la période"
     }else{
       # Création du graphique
       # Placement des courbes des véhicules
-      fig <- plot_ly(bu, x = ~Heure)
+      fig <- plot_ly(trafic_horaire, x = ~Heure)
       fig <- fig %>% add_trace(y= ~Voiture_BversA, mode = "lines+markers", name = "B vers A", 
                                line=list(color="blue", dash = "dot"),
                                marker=list(color="blue"))
@@ -814,7 +814,7 @@ shinyServer(function(session,input, output) {
                  gridcolor = 'ffff')
         )
       
-      list(fig=fig,Donnee=bu) #Valeur stokée dans le reactive
+      list(fig=fig,Donnee=trafic_horaire) #Valeur stokée dans le reactive
       
     }    
     
@@ -1294,7 +1294,7 @@ shinyServer(function(session,input, output) {
   }) 
   
   # Import
-  output$downloadData2 <- downloadHandler(
+  output$downloaddonnees_complementaires <- downloadHandler(
     filename = "Comparaison_capteur.csv", # Nom du fichier importé
     content = function(file) {
       write_excel_csv2(prep_tabl2(), file)
@@ -1623,7 +1623,7 @@ shinyServer(function(session,input, output) {
     if (is.null(donnee_import()$donnee)){return()
     }else{
       if(mode(Compar_tabl())=="character"){return()
-        }else{downloadButton("downloadData2", "Import des données")}
+        }else{downloadButton("downloaddonnees_complementaires", "Import des données")}
     }
   )
   

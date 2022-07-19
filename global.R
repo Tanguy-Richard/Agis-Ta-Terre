@@ -18,7 +18,7 @@ library(synchrony) # fonction peaks (synchronicité des pics)
 library(forecast) # fonction ma : moving average
 library(zoo) # fonction na.trim
 library(plotly) # Pour le graphique des heures d'engorgement
-library(readr) # Pour l'export encsv compatible excel
+library(readr) # Pour l'export en csv compatible excel
 
 ########
 # Parametrage des package
@@ -58,7 +58,7 @@ listeNombis <- c("Burel-01","Leclerc-02","ParisMarché-03","rueVignes-04","Paris
 ##########################################################
 
 
-key = "UZiPH7KKBY1TS4wqAV8LHaXbN2FlBDlp7s5aXTcV"
+key = read.delim("clef.txt",header = FALSE)[[1]]
 
 
 #################################################
@@ -116,7 +116,7 @@ Vacances <- GET(
 # Découpe d'un interval de 2 date en bout de 3 mois (capacité d'import maximal de l'API de telraam)
 ########################
 
-# Dates <- function(date1, date2) {
+
 #' Découper une période en "tranches" de 3 mois
 #'
 #' @param date1 Caractère. Date de début au format "aaaa-mm-jj hh:mm:ss"
@@ -129,13 +129,11 @@ Vacances <- GET(
 #' date1 <- "2021-03-01 12:35:21"
 #' date2 <- "2022-07-01 03:15:33"
 #'
-#' test_df <- Dates(date1, date2) %>% 
+#' test_df <- decouper_periode(date1, date2) %>% 
 #'   mutate(intervalle = interval(debut, fin))
 #' 
 #' 
-Dates <- function(date1, date2)
-  
-{
+decouper_periode <- function(date1, date2){
   
   debut <- seq(from = ymd_hms(date1), 
                to = ymd_hms(date2),
@@ -154,7 +152,7 @@ Dates <- function(date1, date2)
 #' Test d'appartenance d'une date a une liste d'intervals lubridate
 #'
 #' @param date Date au format lubridate 
-#' @param Liste_interval Liste d'intervals lubridate
+#' @param liste_interval Liste d'intervals lubridate
 #'
 #' @return Un booléen indiquant si la date appartient ou pas à la liste d'interval
 #' @export 
@@ -164,10 +162,10 @@ Dates <- function(date1, date2)
 #' interval1 <- interval("2020/11/02 00:00:00","2021/03/01 00:00:00")
 #' interval2 <- interval("2022/02/01 00:00:00","2021/04/01 00:00:00")
 #' Liste_interval = c(interval1, interval2)
-#' Test_date(date,Liste_interval)
+#' test_date(date,Liste_interval)
 
-Test_date <- function(date, Liste_interval){
-  return(sum(date %within% Liste_interval) > 0)
+test_date <- function(date, liste_interval){
+  return(sum(date %within% liste_interval) > 0)
 }
 
 ########################
@@ -175,20 +173,19 @@ Test_date <- function(date, Liste_interval){
 ########################
 #' Filtrage sur l'appartenance à une liste de périodes d'un dataframe
 #'
-#' @param Donnees un dataframe avec une colonne "date" (format lubridate) 
-#' @param Liste_interval une liste d'intervals lubridate
+#' @param donnees un dataframe avec une colonne "date" (format lubridate) 
+#' @param liste_interval une liste d'intervals lubridate
 #'
 #' @return Le data frame des lignes correspondants aux intervals et un dataframe complementaire 
-#' sous la forme d'une liste a 2 elements: data1 et data2
+#' sous la forme d'une liste a 2 elements: donnees_correspondantes et donnees_complementaires
 #' @export
 #'
-
-Selection_Date <- function(Donnees, Liste_interval){
-  Valeurs_Bool = unlist(lapply(Donnees$date, FUN = function(x){Test_date(x,Liste_interval)}))
-  data1 = Donnees[Valeurs_Bool,]
-  data2 = Donnees[!Valeurs_Bool,]
-  return(list(data1 = data1,
-              data2 = data2))
+selection_date <- function(donnees, liste_interval){
+  dates_correspondantes = unlist(lapply(donnees$date, FUN = function(x){test_date(x,liste_interval)}))
+  donnees_correspondantes = donnees[dates_correspondantes,]
+  donnees_complementaires = donnees[!dates_correspondantes,]
+  return(list(donnees_correspondantes = donnees_correspondantes,
+              donnees_complementaires = donnees_complementaires))
 }
 
 
@@ -199,19 +196,20 @@ Selection_Date <- function(Donnees, Liste_interval){
 
 #' Filtrage sur l'appartenance à une liste de dates d'un dataframe
 #'
-#' @param Donnees un dataframe avec une colonne "date" (format lubridate)  
-#' @param Liste_date une liste de dates lubridate
+#' @param donnees un dataframe avec une colonne "date" (format lubridate)  
+#' @param liste_date une liste de dates lubridate
 #'
-#' @returnLe data frame des lignes correspondants aux dates et un dataframe complementaire 
-#' sous la forme d'une liste a 2 elements: data1 et data2
+#' @return Le data frame des lignes correspondants aux dates et un dataframe complementaire 
+#' sous la forme d'une liste a 2 elements: donnees_correspondantes et donnees_complementaires
 #' @export
 #'
-Selection_Date2=function(Donnees,Liste_date){
-  Valeurs_Bool = unlist(lapply(Donnees$date, FUN = function(x){
-    date(x) %in% Liste_date}))
-  data1 = Donnees[Valeurs_Bool,]
-  data2 = Donnees[!Valeurs_Bool,]
-  return(list(data1 = data1 ,data2 =data2))
+selection_date2=function(donnees,liste_date){
+  dates_correspondantes = unlist(lapply(donnees$date, FUN = function(x){
+    date(x) %in% liste_date}))
+  donnees_correspondantes = donnees[dates_correspondantes,]
+  donnees_complementaires = donnees[!dates_correspondantes,]
+  return(list(donnees_correspondantes = donnees_correspondantes ,
+              donnees_complementaires = donnees_complementaires))
 }
 
 #########################
@@ -220,40 +218,47 @@ Selection_Date2=function(Donnees,Liste_date){
 
 #' Séparation d'un signal en 3 part ( tendance, cycle hebdomadaire et bruit statistique)
 #'
-#' @param tableau Un dataframe avec une colonne "date" (format lubridate) et une colonne cible
+#' @param donnees Un dataframe avec une colonne "date" (format lubridate) et une colonne cible
 #' @param col Nom de la colonne cible
 #' @param model un modèle (multiplicatif ou additif) pour la séparation
 #'
 #' @return une liste de 3 vecteurs: la tendance, le cycle hebdomadaire et le bruit statistique
 #' @export
 #'
-desaisonalite=function(tableau,col,model){
-  tendance <- as.vector(ma(tableau[,col],order = 14))
+desaisonalite=function(donnees,col,model){
+  # Calcul de la tendance à l'aide d'une moyenne glissante
+  tendance <- as.vector(ma(donnees[,col],order = 14))
+  # Extraction de la tendance selon le choix de modèle
   if(model=="mult"){
-    sanstendance <- tableau[,col] / tendance
+    sanstendance <- donnees[,col] / tendance
   }
   if(model=="add"){
-    sanstendance <- tableau[,col] - tendance
+    sanstendance <- donnees[,col] - tendance
   }
-  tab_temp <- as_tibble(cbind(tableau$date,sanstendance))
+  # Donnees sans tendance
+  tab_temp <- as_tibble(cbind(donnees$date,sanstendance))
   colnames(tab_temp) <- c("date","ma")
-  tab_temp_week <- tab_temp %>% group_by(wday(date)) %>% mutate(moyday=mean(ma,na.rm = TRUE))
-  tab_temp_week <- tab_temp_week %>% filter (! duplicated(wday(date))) %>% arrange(wday(date))
-  colnames(tab_temp_week) <- c("date","ma","Jsem","moyday")
-  
+  # Determination de l'impact du jour de la semaine
+  jours_semaines <- tab_temp %>% group_by(wday(date)) %>% mutate(moyday=mean(ma,na.rm = TRUE))
+  jours_semaines <- jours_semaines %>% filter (! duplicated(wday(date))) %>% arrange(wday(date))
+  colnames(jours_semaines) <- c("date","ma","Jsem","moyday")
+  # Séparation des données sans tendance en un cycle hebdomadaire et un signal restant (bruit) 
   decycle <- NULL
   cycle <- NULL
   for(i in 1:length(tab_temp$date)){
-    wd <- wday(tab_temp$date[i])
-    val_wd <- tab_temp_week[tab_temp_week$Jsem==wd,]$moyday
-    cycle <- c(cycle,val_wd)
+    # Récupération du jour de la semaine
+    jour <- wday(tab_temp$date[i])
+    # Récupération de la valeur du jour de la semaine
+    val_jour <- jours_semaines[jours_semaines$Jsem==jour,]$moyday
+    # Séparaison selon le modèle choisie
+    cycle <- c(cycle,val_jour)
     if(model=="mult"){
-      val <- tab_temp$ma[i]/val_wd
+      val_restante <- tab_temp$ma[i]/val_jour
     }
     if(model=="add"){
-      val <- tab_temp$ma[i]-val_wd
+      val_restante <- tab_temp$ma[i]-val_jour
     }
-    decycle <- c(decycle,val)
+    decycle <- c(decycle,val_restante)
   }
   
   return(list(tendance=tendance,cycle=cycle,bruit=decycle))
