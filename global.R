@@ -57,7 +57,7 @@ listeNombis <- c("Burel-01","Leclerc-02","ParisMarché-03","rueVignes-04","Paris
 ### clef pour l'API Telraam (à générer su telraam.net) ###
 ##########################################################
 
-
+# Récupération de la clef de l'API
 key = read.delim("clef.txt",header = FALSE)[[1]]
 
 

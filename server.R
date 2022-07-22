@@ -10,7 +10,7 @@ shinyServer(function(session,input, output) {
 
 #######  
 
-  # Test d'existence du capteur ajoute
+  # Test d'existence du capteur ajouté (zone optionnel)
   
 #######   
   
@@ -18,12 +18,14 @@ shinyServer(function(session,input, output) {
     input$go_import #Pour conditionner la mise à jour
     isolate({
       
-    if(input$captIDsup!=""){
+    if(input$captIDsup!=""){ # On ne vérifie que si le capteur est valide (zone de texte non vide)
       
       idseg = input$captIDsup
-      status <- GET(paste0("https://telraam-api.net/v1/segments/id/", idseg),
-                    add_headers("X-Api-Key" = key))$status_code
-      if(status==200){
+      status <- paste0("https://telraam-api.net/v1/segments/id/", idseg) %>% # On recréer l'adresse de l'API (avec le numéro du capteur)
+        GET(add_headers("X-Api-Key" = key)) %>% # On lance une requete 
+        .$status_code # On récupère le statut de la requete 
+      
+      if(status==200){ # Cas d'echec car le capteur n'existe pas
         FALSE
       }else{
         TRUE
@@ -43,9 +45,9 @@ shinyServer(function(session,input, output) {
   
   liste_capteur <- reactive({
     # Gestion du potentiel capteur en plus
-    if(input$captIDsup!=""){
+    if(input$captIDsup!=""){ # S'il y a un capteur supplémentaire on l'ajoute 
       c(input$Capteurs, input$nomIDsup)
-    }else{
+    }else{ #Sinon on garde la liste telle quelle
       input$Capteurs
     }
   })
@@ -68,10 +70,11 @@ shinyServer(function(session,input, output) {
     isolate({
       
     try({
-      
+    
+    # Récupération des identifiants des capteurs choisis    
     idCapteurs <- listeSegments[listeNom %in% input$Capteurs]
     
-    # Gestion du potentiel capteur en plus
+    # Gestion du potentiel capteur en plus (ajout ou non, selon la liste d'identifiant et de nom)
     if(input$captIDsup!=""){
       idCapteurs <- c(idCapteurs,input$captIDsup)
       listecapt <- c(listeSegments,input$captIDsup)
@@ -81,25 +84,24 @@ shinyServer(function(session,input, output) {
       listeNom_temp <- listeNom
     }
     
-    
-    ### Fonction recup date (l'API ne permet de recupere les donnees que par laps de 3 mois)
-    ### On segmente la période en bout de 3 mois pour importer par petits bouts
-      
-    
-    
     # initialisation sous la forme de dataframes vides
     dfglob=data.frame() # pour les donnees totales
     dfgeo=data.frame() # pour les information geographiqe + donnees des dernieres 24h d'enregistrement
     
-    
+    # Outils pour afficher la bar de progression du telechargement 
     withProgress(message = 'Import', value = 0,{
     incProgress(0, detail = paste("Capteurs", input$Capteurs[1]))
     k <- 2             
     # iteration sur l'ensemble des capteurs renseignes
     for(segs in idCapteurs){
       #recuperation des donnees sur le capteurs: localisation et date d'emission
-      df <- fromJSON(rawToChar(GET(paste0("https://telraam-api.net/v1/segments/id/", segs),
-                                   add_headers("X-Api-Key" = key))$content))$features
+      df <- paste0("https://telraam-api.net/v1/segments/id/", segs) %>%
+        GET(add_headers("X-Api-Key" = key)) %>%
+        .$content %>%
+        rawToChar() %>%
+        fromJSON() %>%
+        .$features
+      
       # Recuperation des coordonnees (geometry) des routes isolees
       lat=df$geometry$coordinates[[1]][,,2]
       lon=df$geometry$coordinates[[1]][,,1]
@@ -132,34 +134,47 @@ shinyServer(function(session,input, output) {
     "time_end": "',dates$fin[i],'"                          
     }'))
         # On rend le fichier exploitable par R
-        dataTraffic = fromJSON(rawToChar(resTraffic$content))
+        dataTraffic <-  resTraffic %>%
+          .$content %>%
+          rawToChar()%>%
+          fromJSON()
         df <- dataTraffic$report
-        # On change la classe de date (caractère) en Date avec un decalade horaire de 2
+        # On change la classe de date (caractère) en Date avec un decalage horaire de 2
         df$date <- ymd_hms(df$date, tz = df$timezone[1])
         dfglob=rbind(dfglob,df)
       }
+      # Incrémentation de la barre de progression
       incProgress(1/length(idCapteurs), detail = paste("Capteurs", liste_capteur()[k]))
       k <- k+1
     }
     })
     
     #gestion du typage
-    dfglob$segment_id <- as.character(dfglob$segment_id)
-    dfgeo$lat <- as.numeric(as.character(dfgeo$lat))
-    dfgeo$lon <- as.numeric(as.character(dfgeo$lon))
+    dfglob$segment_id <- dfglob$segment_id %>% 
+      as.character()
+    dfgeo$lat <- dfgeo$lat %>% 
+      as.character() %>% 
+      as.numeric()
+    dfgeo$lon <- dfgeo$lon %>% 
+      as.character() %>% 
+      as.numeric()
     
     
     #renomage des capteurs
     for(i in 1:length(listecapt)){
-      dfglob$segment_id[dfglob$segment_id==listecapt[i]] <-listeNom_temp[i] 
+      dfglob <- dfglob %>% mutate(segment_id=replace(segment_id,segment_id==listecapt[i],listeNom_temp[i]))
     }
     
     #################
     # Selection des donnees non nulles
     #################
     
-    donnees_non_nulles <- dfglob[apply(dfglob[,6:17], MARGIN = 1, FUN = function(x){return(sum(x)!=0)}),]
-    donnees_non_nulles <- donnees_non_nulles[donnees_non_nulles$uptime>0.5,]
+   # donnees_non_nulles <- dfglob[apply(dfglob[,6:17], MARGIN = 1, FUN = function(x){return(sum(x)!=0)}),]
+   # donnees_non_nulles <- donnees_non_nulles %>% filter(uptime>0.5)
+    donnees_non_nulles <- dfglob %>% filter(uptime > 0.5,
+                                            heavy_lft + car_lft + pedestrian_lft + bike_lft +
+                                              heavy_rgt + car_rgt + pedestrian_rgt + bike_rgt >0
+                                            )
     
     list_resultat <- list(geomet = dfgeo, donnee = donnees_non_nulles)
     
@@ -186,13 +201,15 @@ shinyServer(function(session,input, output) {
   # Premiere sélection de tableau pour la comparaison de période 
   
   premier_filtre <- reactive({ 
-    input$mise_a_j #Pour conditionner la mise à jour
-    isolate({
+    
     
     donnees <- donnee_import()$donnee #récupération des données d'import
     
+    if(is.null(donnees)){
+      donnees_filtrées <- NULL
+    }else{
     # Filtrage sur le capteur sélectionnée 
-    donnees_filtrées <- donnees[donnees$segment_id==input$capteur,]
+    donnees_filtrées <- donnees[ donnees$segment_id==input$capteur, ]
     
     
     # Filtrage sur le sens choisie 
@@ -200,27 +217,30 @@ shinyServer(function(session,input, output) {
       donnees_filtrées <- donnees_filtrées[,c("date","uptime","heavy","car","bike","pedestrian")]
     }
     if(input$sens=="Rgt"){
-      donnees_filtrées <- donnees_filtrées[,c("date","uptime","heavy_rgt","car_rgt","bike_rgt","pedestrian_rgt")]
-      colnames(donnees_filtrées) <- c("date","uptime","heavy","car","bike","pedestrian")
+      donnees_filtrées <- donnees_filtrées %>% select(c(date,uptime,heavy_rgt,car_rgt,bike_rgt,pedestrian_rgt)) %>%
+        rename(c(heavy = heavy_rgt, car = car_rgt, bike = bike_rgt, pedestrian = pedestrian_rgt))
     }
     if(input$sens=="Lft"){
-      donnees_filtrées <- donnees_filtrées[,c("date","uptime","heavy_lft","car_lft","bike_lft","pedestrian_lft")]
-      colnames(donnees_filtrées) <- c("date","uptime","heavy","car","bike","pedestrian")
+      donnees_filtrées <- donnees_filtrées %>% select(c(date,uptime,heavy_lft,car_lft,bike_lft,pedestrian_lft)) %>%
+        rename(c(heavy = heavy_lft, car = car_lft, bike = bike_lft, pedestrian = pedestrian_lft))
     }
     
-    # Filtrage sur la sélection de mobilités 
+    # Filtrage sur la sélection de mobilités
     if(length(input$mobilite)>1){
+      # donnees_filtrées <- donnees_filtrées %>% mutate(total = sum(input$mobilite))  <=== Ne marche pas
       interet <- apply(donnees_filtrées[,input$mobilite], MARGIN = 1 ,FUN = sum)
       donnees_filtrées$total <- interet
     }else{
       donnees_filtrées$total <- donnees_filtrées[,input$mobilite]
-    }
-    donnees_filtrées})
+    }}
+    donnees_filtrées
   })
   
   # Creation du tableau pour la periode de référence
   
-  tableau_P1 <- reactive({ 
+  tableau_P1 <- reactive({
+    input$mise_a_j #Pour conditionner la mise à jour
+    isolate({
       # Récupération des données préfiltrées
       donnees <- premier_filtre()
       
@@ -232,123 +252,145 @@ shinyServer(function(session,input, output) {
       # Sélection de la période temporelle
       date <- input$daterange1
       periode <- interval(ymd_hms(paste(date[1],"00:00:00")),ymd_hms(paste(date[2],"23:59:00")))
-      donnees <- selection_date(donnees,periode)$donnees_correspondantes
+      donnees <- selection_date(donnees,periode) %>%
+        .$donnees_correspondantes
       
       # Sélection des jours de toute la semaine
-      donnees <- donnees[wday(donnees$date) %in% input$SM1 ,]
+      donnees <- donnees %>% filter(wday(date) %in% input$SM1)
       
       if(length(donnees$date)==0){ # Test pour savoir si la sélection est vide
         donnees <- "Pas de données pour la selection de la période de référence"
       }else{ # Sélection de vacances
         if(input$Vacance1=="Non"){  
-          donnees <- selection_date(donnees,Vacances$interval)$donnees_complementaires
+          donnees <- selection_date(donnees,Vacances$interval) %>%
+            .$donnees_complementaires
         }
         if(input$Vacance1=="Seulement les vacances"){
-          donnees <- selection_date(donnees,Vacances$interval)$donnees_correspondantes
+          donnees <- selection_date(donnees,Vacances$interval) %>%
+            .$donnees_correspondantes
         }
         if(length(donnees$date)==0){  # Test pour savoir si la sélection est vide
           donnees <- "Pas de données pour la selection de la période de référence"
         }else{ # Sélection de jours fériés
           if(input$JF1=="Non"){
-            donnees <- selection_date2(donnees,JoursFeries)$donnees_complementaires
+            donnees <- selection_date2(donnees,JoursFeries) %>% 
+              .$donnees_complementaires
           }
           if(input$JF1=="Seulement les jours fériés"){
-            donnees <- selection_date2(donnees,JoursFeries)$donnees_correspondantes
+            donnees <- selection_date2(donnees,JoursFeries) %>% 
+              .$donnees_correspondantes
           }
           if(length(donnees$date)==0){  # Test pour savoir si la sélection est vide
             donnees <- "Pas de données pour la selection de la période de référence"
           }
         }
       }}
-      donnees
+      donnees})
   })
 
   # Creation du tableau pour la première periode de comparaison
   
   tableau_P2 <- reactive({ 
-    # Récupération des données préfiltrées
-    donnees <- premier_filtre()
-    
-    # Test pour savoir si la sélection est vide
-    if(length(donnees$date)==0){
-      donnees=""}else{
-    
-    # Sélection de la période temporelle
-    date <- input$daterange2
-    periode <- interval(ymd_hms(paste(date[1],"00:00:00")),ymd_hms(paste(date[2],"23:59:00")))
-    donnees <- selection_date(donnees,periode)$donnees_correspondantes
-    
-    # Sélection des jours de toute la semaine
-    donnees <- donnees[wday(donnees$date) %in% input$SM2 ,]
-    
-    if(length(donnees$date)==0){# Test pour savoir si la sélection est vide
-      donnees <- "Pas de données pour la selection de la première période de comparaison"
-    }else{ # Sélection de vacances
-      if(input$Vacance2=="Non"){
-        donnees <- selection_date(donnees,Vacances$interval)$donnees_complementaires
-      }
-      if(input$Vacance2=="Seulement les vacances"){
-        donnees <- selection_date(donnees,Vacances$interval)$donnees_correspondantes
-      }
-      if(length(donnees$date)==0){ # Test pour savoir si la sélection est vide
-        donnees <- "Pas de données pour la selection de la première période de comparaison"
-      }else{ # Sélection de jours fériés
-        if(input$JF2=="Non"){
-          donnees <- selection_date2(donnees,JoursFeries)$donnees_complementaires
-        }
-        if(input$JF2=="Seulement les jours fériés"){
-          donnees <- selection_date2(donnees,JoursFeries)$donnees_correspondantes
-        }
-        if(length(donnees$date)==0){ # Test pour savoir si la sélection est vide
-          donnees <- "Pas de données pour la selection de la première période de comparaison"
-        }
-      }
-    }}
-    donnees
+    input$mise_a_j #Pour conditionner la mise à jour
+    isolate({
+      # Récupération des données préfiltrées
+      donnees <- premier_filtre()
+      
+      # Test pour savoir si la sélection est vide
+      if(length(donnees$date)==0){
+        donnees="Selectionnez un capteur et au moins une mobilité, puis appuyez sur Mettre à jour"}else{
+          
+          
+          # Sélection de la période temporelle
+          date <- input$daterange2
+          periode <- interval(ymd_hms(paste(date[1],"00:00:00")),ymd_hms(paste(date[2],"23:59:00")))
+          donnees <- selection_date(donnees,periode) %>%
+            .$donnees_correspondantes
+          
+          # Sélection des jours de toute la semaine
+          donnees <- donnees %>% filter(wday(date) %in% input$SM2)
+          
+          if(length(donnees$date)==0){ # Test pour savoir si la sélection est vide
+            donnees <- "Pas de données pour la selection de la période de référence"
+          }else{ # Sélection de vacances
+            if(input$Vacance2=="Non"){  
+              donnees <- selection_date(donnees,Vacances$interval) %>%
+                .$donnees_complementaires
+            }
+            if(input$Vacance2=="Seulement les vacances"){
+              donnees <- selection_date(donnees,Vacances$interval) %>%
+                .$donnees_correspondantes
+            }
+            if(length(donnees$date)==0){  # Test pour savoir si la sélection est vide
+              donnees <- "Pas de données pour la selection de la période de référence"
+            }else{ # Sélection de jours fériés
+              if(input$JF2=="Non"){
+                donnees <- selection_date2(donnees,JoursFeries) %>% 
+                  .$donnees_complementaires
+              }
+              if(input$JF2=="Seulement les jours fériés"){
+                donnees <- selection_date2(donnees,JoursFeries) %>% 
+                  .$donnees_correspondantes
+              }
+              if(length(donnees$date)==0){  # Test pour savoir si la sélection est vide
+                donnees <- "Pas de données pour la selection de la période de référence"
+              }
+            }
+          }}
+      donnees})
   })
+  
   
   # Creation du tableau pour la seconde periode de comparaison
   
   tableau_P3 <- reactive({ 
-    # Récupération des données préfiltrées
-    donnees <- premier_filtre()
-    
-    # Test pour savoir si la sélection est vide
-    if(length(donnees$date)==0){
-      donnees=""}else{
-        
-        # Sélection de la période temporelle
-        date <- input$daterange4
-        periode <- interval(ymd_hms(paste(date[1],"00:00:00")),ymd_hms(paste(date[2],"23:59:00")))
-        donnees <- selection_date(donnees,periode)$donnees_correspondantes
-        
-        # Sélection des jours de toute la semaine
-        donnees <- donnees[wday(donnees$date) %in% input$SM3 ,]
-        
-        if(length(donnees$date)==0){# Test pour savoir si la sélection est vide
-          donnees <- "Pas de données pour la selection de la seconde période de comparaison"
-        }else{ # Sélection de vacances
-          if(input$Vacance3=="Non"){
-            donnees <- selection_date(donnees,Vacances$interval)$donnees_complementaires
-          }
-          if(input$Vacance3=="Seulement les vacances"){
-            donnees <- selection_date(donnees,Vacances$interval)$donnees_correspondantes
-          }
+    input$mise_a_j #Pour conditionner la mise à jour
+    isolate({
+      # Récupération des données préfiltrées
+      donnees <- premier_filtre()
+      
+      # Test pour savoir si la sélection est vide
+      if(length(donnees$date)==0){
+        donnees="Selectionnez un capteur et au moins une mobilité, puis appuyez sur Mettre à jour"}else{
+          
+          
+          # Sélection de la période temporelle
+          date <- input$daterange4
+          periode <- interval(ymd_hms(paste(date[1],"00:00:00")),ymd_hms(paste(date[2],"23:59:00")))
+          donnees <- selection_date(donnees,periode) %>%
+            .$donnees_correspondantes
+          
+          # Sélection des jours de toute la semaine
+          donnees <- donnees %>% filter(wday(date) %in% input$SM3)
+          
           if(length(donnees$date)==0){ # Test pour savoir si la sélection est vide
-            donnees <- "Pas de données pour la selection de la seconde période de comparaison"
-          }else{ # Sélection de jours fériés
-            if(input$JF3=="Non"){
-              donnees <- selection_date2(donnees,JoursFeries)$donnees_complementaires
+            donnees <- "Pas de données pour la selection de la période de référence"
+          }else{ # Sélection de vacances
+            if(input$Vacance3=="Non"){  
+              donnees <- selection_date(donnees,Vacances$interval) %>%
+                .$donnees_complementaires
             }
-            if(input$JF3=="Seulement les jours fériés"){
-              donnees <- selection_date2(donnees,JoursFeries)$donnees_correspondantes
+            if(input$Vacance3=="Seulement les vacances"){
+              donnees <- selection_date(donnees,Vacances$interval) %>%
+                .$donnees_correspondantes
             }
-            if(length(donnees$date)==0){ # Test pour savoir si la sélection est vide
-              donnees <- "Pas de données pour la selection de la seconde période de comparaison"
+            if(length(donnees$date)==0){  # Test pour savoir si la sélection est vide
+              donnees <- "Pas de données pour la selection de la période de référence"
+            }else{ # Sélection de jours fériés
+              if(input$JF3=="Non"){
+                donnees <- selection_date2(donnees,JoursFeries) %>% 
+                  .$donnees_complementaires
+              }
+              if(input$JF3=="Seulement les jours fériés"){
+                donnees <- selection_date2(donnees,JoursFeries) %>% 
+                  .$donnees_correspondantes
+              }
+              if(length(donnees$date)==0){  # Test pour savoir si la sélection est vide
+                donnees <- "Pas de données pour la selection de la période de référence"
+              }
             }
-          }
-        }}
-    donnees
+          }}
+      donnees})
   })
   
   
@@ -375,11 +417,15 @@ shinyServer(function(session,input, output) {
     # Import du tableau de données pour la période de référence
     Tableau_1 <- tableau_P1()
     
-    # Réalisation de moyenne par tranche horaire sur la période
+    # Calcul de l'effectif par tranche horaire
     n_1 <- Tableau_1 %>% group_by(hour(date)) %>% summarise(n = n())
-    Donnee_1 <- Tableau_1 %>% group_by(hour(date)) %>%
-      mutate(Moyenne=mean(total))
-    Donnee_1 <- Donnee_1 %>% filter (!duplicated(hour(date))) %>% arrange(hour(date))
+    # Réalisation de moyenne par tranche horaire sur la période
+    Donnee_1 <- Tableau_1 %>%
+      group_by(hour(date)) %>%
+      mutate(Moyenne=mean(total)) %>%
+      filter (!duplicated(hour(date))) %>%
+      arrange(hour(date))
+  
     # On ne garde que l'heure et la moyenne (et on ajoute l'effectif)
     Donnee_1 <- bind_cols(Donnee_1[,8:9],n_1[,2])
     
@@ -387,12 +433,15 @@ shinyServer(function(session,input, output) {
     
     # Import du tableau de données pour la première période de comparaison
     Tableau_2 <- tableau_P2()
-    # Import du tableau de données pour la période 2
+    # Calcul de l'effectif par tranche horaire
     n_2 <- Tableau_2 %>% group_by(hour(date)) %>% summarise(n = n())
     # Réalisation de moyenne par tranche horaire sur la période
-    Donnee_2 <- Tableau_2 %>% group_by(hour(date)) %>%
-      mutate(Moyenne=mean(total))
-    Donnee_2 <- Donnee_2 %>% filter (!duplicated(hour(date))) %>% arrange(hour(date))
+    Donnee_2 <- Tableau_2 %>%
+      group_by(hour(date)) %>%
+      mutate(Moyenne=mean(total)) %>%
+      filter (!duplicated(hour(date))) %>%
+      arrange(hour(date))
+    
     # On ne garde que l'heure et la moyenne (et on ajoute l'effectif)
     Donnee_2 <- bind_cols(Donnee_2[,8:9],n_2[,2])
     
@@ -400,20 +449,22 @@ shinyServer(function(session,input, output) {
     
     # Import du tableau de données pour la seconde période de comparaison
     Tableau_3 <- tableau_P3()
-    # Import du tableau de données pour la période 2
+    # Calcul de l'effectif par tranche horaire
     n_3 <- Tableau_3 %>% group_by(hour(date)) %>% summarise(n = n())
     # Réalisation de moyenne par tranche horaire sur la période
-    Donnee_3 <- Tableau_3 %>% group_by(hour(date)) %>%
-      mutate(Moyenne=mean(total))
-    Donnee_3 <- Donnee_3 %>% filter (!duplicated(hour(date))) %>% arrange(hour(date))
+    Donnee_3 <- Tableau_3 %>% 
+      group_by(hour(date)) %>%
+      mutate(Moyenne=mean(total)) %>% 
+      filter (!duplicated(hour(date))) %>% 
+      arrange(hour(date))
     # On ne garde que l'heure et la moyenne (et on ajoute l'effectif)
     Donnee_3 <- bind_cols(Donnee_3[,8:9],n_3[,2])
     
     colnames(Donnee_3) <- c("Heure","Période_2","Effectif_P2")
     
     # Concaténation sur l'heure de la moyenne
-    Donnee <-  inner_join(Donnee_1,Donnee_2,by="Heure")
-    Donnee <-  inner_join(Donnee,Donnee_3,by="Heure")
+    Donnee <-  inner_join(Donnee_1,Donnee_2,by="Heure") %>%
+      inner_join(Donnee_3,by="Heure")
     
     Donnee
     
@@ -437,12 +488,15 @@ shinyServer(function(session,input, output) {
     
       # Sélection du capteur choisit par l'utilisateur
       Id = input$capteur3
-      donnees_temp <- donnees[donnees$segment_id==Id,]
+      donnees_temp <- donnees %>% 
+        filter(segment_id==Id)
       
       # Séléction de la période
       date <- input$daterange3
       periode <- interval(ymd_hms(paste(date[1],"00:00:00")),ymd_hms(paste(date[2],"23:59:00")))
-      selection_date(donnees_temp,periode)$donnees_correspondantes
+      
+      selection_date(donnees_temp,periode) %>% 
+        .$donnees_correspondantes
   })
   
   
@@ -479,19 +533,22 @@ shinyServer(function(session,input, output) {
       
       # Création du tableau selon la direction choisie
       if(orientation=="Toute"){
-        tableau_temp <- tableau_temp[,c("car","heavy","vit_moins10","vit_moins20","vit_moins30","vit_moins40")]
-        tableau_temp <- tableau_temp %>% mutate(vehic = car + heavy)
-        tableau_temp <- tableau_temp %>% arrange(vehic)
+        tableau_temp <- tableau_temp %>% 
+          select(car,heavy,vit_moins10,vit_moins20,vit_moins30,vit_moins40) %>%
+          mutate(vehic = car + heavy) %>%
+          arrange(vehic)
       }
       if(orientation=="Rgt"){
-        tableau_temp <- tableau_temp[,c("car_rgt","heavy_rgt","vit_moins10","vit_moins20","vit_moins30","vit_moins40")]
-        tableau_temp <- tableau_temp %>% mutate(vehic = car_rgt + heavy_rgt)
-        tableau_temp <- tableau_temp %>% arrange(vehic)
+        tableau_temp <- tableau_temp %>% 
+          select(car_rgt,heavy_rgt,vit_moins10,vit_moins20,vit_moins30,vit_moins40) %>%
+          mutate(vehic = car_rgt + heavy_rgt) %>%
+          arrange(vehic)
       }
       if(orientation=="Lft"){
-        tableau_temp <- tableau_temp[,c("car_lft","heavy_lft","vit_moins10","vit_moins20","vit_moins30","vit_moins40")]
-        tableau_temp <- tableau_temp %>% mutate(vehic = car_lft + heavy_lft)
-        tableau_temp <- tableau_temp %>% arrange(vehic)
+        tableau_temp <- tableau_temp %>% 
+          select(car_lft,heavy_lft,vit_moins10,vit_moins20,vit_moins30,vit_moins40)  %>%
+          mutate(vehic = car_lft + heavy_lft) %>%
+          arrange(vehic)
       }
       # Calcul de moyenne glissante sur les parts
       vitesse10 <- embed(tableau_temp$vit_moins10,50)
@@ -534,6 +591,8 @@ shinyServer(function(session,input, output) {
       #Création du tableau pour l'import
       TablRes <- as.data.frame(cbind(vehicule,vitesse10,vitesse20,vitesse30,vitesse40))
       colnames(TablRes) <- c("Nombre de vehicules","plus de 40km/h","plus de 30km/h","plus de 20km/h","plus de 10km/h")
+      
+      # Creation du tibble pour commencer le graphique
       k=length(vehicule)
       Legende <- c(rep("Plus de 10km/h",k),rep("Plus de 20km/h",k),rep("Plus de 30km/h",k),rep("Plus de 40km/h",k))
       donnee <- tibble(VehG,Vitesse,Legende)
@@ -547,9 +606,13 @@ shinyServer(function(session,input, output) {
       for(i in levels(as.factor(y$colour))){
         Donnee <- bind_cols(Donnee,y[y$colour==i,-1])
       }
+      # Absisse (nombre de véhicule par heure)
       X=Donnee[,1]
+      # Ordonnée des courbes de lissages
       Y=Donnee[,c(2,4,6,8)]
-      Y <- t(t(Y)[order(t(Y)[,1]),]) # Rangement des colonnes par vitesse
+      # Rangement des colonnes par vitesse: 
+      # Il y a un moins grand pourcentage d'usagers dépassant les 40km/h que ceux dépassant 30km/h (etc)
+      Y <- t(t(Y)[order(t(Y)[,1]),])
       Donnee <- as.data.frame(bind_cols(X,Y))
       colnames(Donnee) <- c("Nombre de vehicules","plus de 40km/h","plus de 30km/h","plus de 20km/h","plus de 10km/h") #Renomage des colonnes
       # Calcul des seuils pour chaque courbes à partir d'un test de Darling Erdos
@@ -635,8 +698,8 @@ shinyServer(function(session,input, output) {
     # Filtrage sur les segments et l'heure sélectionnées
     segments=c(input$capteur1,input$capteur2)
     heure = input$heure
-    Seg1 <- donnee[donnee$segment_id==segments[1] & hour(donnee$date)==heure,]
-    Seg2 <- donnee[donnee$segment_id==segments[2] & hour(donnee$date)==heure,]
+    Seg1 <- donnee %>% filter(segment_id==segments[1], hour(date)==heure)
+    Seg2 <- donnee %>% filter(segment_id==segments[2], hour(date)==heure)
     # Jointure sur les dates communes
     tabjoin <- inner_join(Seg1,Seg2,by="date",suffix=c("1","2"))
     # Sélectioon du suffixe par rapport aux directions choisies
@@ -731,31 +794,38 @@ shinyServer(function(session,input, output) {
   plot_eng_react <- reactive({
     
     #Séléction du capteur sélectionnée
-    donnees_filtrees=subset(donnee_import()$donnee, segment_id==input$capteur4)
+    donnees_filtrees <- donnee_import() %>% 
+      .$donnee %>%
+      filter(segment_id==input$capteur4)
     
     #Séléction de la période
     date <- input$daterange5
     
     periode <- interval(ymd(date[1]),ymd(date[2]))
-    donnees_filtrees=selection_date(donnees_filtrees,periode)$donnees_correspondantes
+    donnees_filtrees <- selection_date(donnees_filtrees,periode) %>% 
+      .$donnees_correspondantes
     
     if(length(donnees_filtrees$date)==0){  # Test pour savoir si la sélection est vide
       "Pas de données pour la selection de la période"
     }else{
       if(input$Vacance4=="Non"){
-        donnees_filtrees <- selection_date(donnees_filtrees,Vacances$interval)$donnees_complementaires
+        donnees_filtrees <- selection_date(donnees_filtrees,Vacances$interval) %>%
+          .$donnees_complementaires
       }
       if(input$Vacance4=="Seulement les vacances"){
-        donnees_filtrees <- selection_date(donnees_filtrees,Vacances$interval)$donnees_correspondantes
+        donnees_filtrees <- selection_date(donnees_filtrees,Vacances$interval) %>%
+          .$donnees_correspondantes
       }
       if(length(donnees_filtrees$date)==0){  # Test pour savoir si la sélection est vide
         donnees_filtrees <- "Pas de données pour la selection de la période"
       }else{ # Sélection de jours fériés
         if(input$JF4=="Non"){
-          donnees_filtrees <- selection_date2(donnees_filtrees,JoursFeries)$donnees_complementaires
+          donnees_filtrees <- selection_date2(donnees_filtrees,JoursFeries) %>%
+            .$donnees_complementaires
         }
         if(input$JF4=="Seulement les jours fériés"){
-          donnees_filtrees <- selection_date2(donnees_filtrees,JoursFeries)$donnees_correspondantes
+          donnees_filtrees <- selection_date2(donnees_filtrees,JoursFeries) %>%
+            .$donnees_correspondantes
         }
         if(length(donnees_filtrees$date)==0){  # Test pour savoir si la sélection est vide
           "Pas de données pour la selection de la période"
@@ -763,11 +833,23 @@ shinyServer(function(session,input, output) {
     # Séléction des jours de la semaine
     jours <- input$SM4
     # Calcul des moyenne par créneau horaire
-    vitesse=donnees_filtrees%>%filter(wday(date) %in% jours)%>% group_by(hour(date)) %>% summarise(n=mean(v85,na.rm=TRUE))
+    # Vitesse
+    vitesse=donnees_filtrees %>%
+      filter(wday(date) %in% jours) %>%
+      group_by(hour(date)) %>% 
+      summarise(moy_vit=mean(v85,na.rm=TRUE))
     colnames(vitesse)=c("Heure", "Vitesse")
-    trafic_rgt=donnees_filtrees%>%filter(wday(date) %in% jours)%>% group_by(hour(date)) %>% summarise(n_rgt=mean(car_rgt+heavy_rgt,na.rm=TRUE))
+    # Trafic B -> A
+    trafic_rgt=donnees_filtrees %>%
+      filter(wday(date) %in% jours) %>%
+      group_by(hour(date)) %>%
+      summarise(moy_rgt=mean(car_rgt+heavy_rgt,na.rm=TRUE))
     colnames(trafic_rgt)=c("Heure", "Voiture_BversA")
-    trafic_lft=donnees_filtrees%>%filter(wday(date) %in% jours)%>% group_by(hour(date)) %>% summarise(n_lft=mean(car_lft+heavy_lft,na.rm=TRUE))
+    # Trafic A -> B
+    trafic_lft=donnees_filtrees %>%
+      filter(wday(date) %in% jours) %>%
+      group_by(hour(date)) %>%
+      summarise(moy_lft=mean(car_lft+heavy_lft,na.rm=TRUE))
     colnames(trafic_lft)=c("Heure", "Voiture_AversB")
     # Tableau final pour le graphique
     trafic_horaire = full_join(trafic_lft, trafic_rgt, by = "Heure")
@@ -849,9 +931,11 @@ shinyServer(function(session,input, output) {
     Tableau_1 <- tableau_P1()
     # Moyenne par tranche horaire
     n_1 <- Tableau_1 %>% group_by(hour(date)) %>% summarise(n = n())
-    Donnee_1 <- Tableau_1 %>% group_by(hour(date)) %>%
-      mutate(Moyenne=mean(total), Var=var(total))
-    Donnee_1 <- Donnee_1 %>% filter (!duplicated(hour(date))) %>% arrange(hour(date))
+    Donnee_1 <- Tableau_1 %>%
+      group_by(hour(date)) %>%
+      mutate(Moyenne=mean(total), Var=var(total)) %>%
+      filter (!duplicated(hour(date))) %>%
+      arrange(hour(date))
     # Sélection de la colonne heure et celle colonne horaire
     Donnee_1 <- bind_cols(Donnee_1[,8:10],n_1[,2])
     # Rajout d'une colonne répétant "Periode Ref"
@@ -861,9 +945,11 @@ shinyServer(function(session,input, output) {
     Tableau_2 <- tableau_P2()
     # Moyenne par tranche horaire
     n_2  <- Tableau_2 %>% group_by(hour(date)) %>% summarise(n = n())
-    Donnee_2 <- Tableau_2 %>% group_by(hour(date)) %>%
-      mutate(Moyenne=mean(total), Var=var(total))
-    Donnee_2 <- Donnee_2 %>% filter (!duplicated(hour(date))) %>% arrange(hour(date))
+    Donnee_2 <- Tableau_2 %>%
+      group_by(hour(date)) %>%
+      mutate(Moyenne=mean(total), Var=var(total)) %>% 
+      filter (!duplicated(hour(date))) %>% 
+      arrange(hour(date))
     # Sélection de la colonne heure et celle colonne horaire
     Donnee_2 <- bind_cols(Donnee_2[,8:10],n_2[,2])
     # Rajout d'une colonne répétant "Periode 1"
@@ -875,7 +961,7 @@ shinyServer(function(session,input, output) {
     colnames(Donnee) <- c("Heure","Nombre_usagers","Variance","Effectif","Periode")
     
     # Selection des colonnes sur lesquelles on a une variance (2 valeurs au moins)
-    Donnee <- Donnee[Donnee$Effectif>1,]
+    Donnee <- Donnee %>% filter(Effectif>1)
     
     # Calcul des bornes (loi de student)
     Donnee <- Donnee%>% mutate(q=qt(.975,df=Effectif-1))
@@ -902,8 +988,13 @@ shinyServer(function(session,input, output) {
     # Boucle sur chaque heure
     for(i in heure){
       # Test de wilcoxon pour une heure donnée
-      stata <- wilcox.test(Tableau_1[hour(Tableau_1$date)==i,]$total,
-                           Tableau_2[hour(Tableau_2$date)==i,]$total)$p.value
+      stata <- wilcox.test(Tableau_1 %>% 
+                             filter(hour(date)==i) %>%
+                             .$total,
+                           Tableau_2 %>%
+                             filter(hour(Tableau_2$date)==i) %>%
+                             .$total
+                           )$p.value
       Stat_wilcox <- c(Stat_wilcox, stata)
       # Choix de la couleur en fonction de la p-valeur du test
       if(stata<0.05){
@@ -949,9 +1040,11 @@ shinyServer(function(session,input, output) {
     Tableau_1 <- tableau_P1()
     # Moyenne par tranche horaire
     n_1 <- Tableau_1 %>% group_by(hour(date)) %>% summarise(n = n())
-    Donnee_1 <- Tableau_1 %>% group_by(hour(date)) %>%
-      mutate(Moyenne=mean(total), Var=var(total))
-    Donnee_1 <- Donnee_1 %>% filter (!duplicated(hour(date))) %>% arrange(hour(date))
+    Donnee_1 <- Tableau_1 %>%
+      group_by(hour(date)) %>%
+      mutate(Moyenne=mean(total), Var=var(total)) %>%
+      filter (!duplicated(hour(date))) %>%
+      arrange(hour(date))
     # Sélection de la colonne heure et celle colonne horaire
     Donnee_1 <- bind_cols(Donnee_1[,8:10],n_1[,2])
     # Rajout d'une colonne répétant "Periode Ref"
@@ -961,9 +1054,11 @@ shinyServer(function(session,input, output) {
     Tableau_2 <- tableau_P3()
     # Moyenne par tranche horaire
     n_2  <- Tableau_2 %>% group_by(hour(date)) %>% summarise(n = n())
-    Donnee_2 <- Tableau_2 %>% group_by(hour(date)) %>%
-      mutate(Moyenne=mean(total), Var=var(total))
-    Donnee_2 <- Donnee_2 %>% filter (!duplicated(hour(date))) %>% arrange(hour(date))
+    Donnee_2 <- Tableau_2 %>% 
+      group_by(hour(date)) %>%
+      mutate(Moyenne=mean(total), Var=var(total)) %>% 
+      filter (!duplicated(hour(date))) %>% 
+      arrange(hour(date))
     # Sélection de la colonne heure et celle colonne horaire
     Donnee_2 <- bind_cols(Donnee_2[,8:10],n_2[,2])
     # Rajout d'une colonne répétant "Periode 2"
@@ -1120,8 +1215,16 @@ shinyServer(function(session,input, output) {
       cap1 <- paste(input$capteur1,input$sens1,sep="_")
       cap2 <- paste(input$capteur2,input$sens2,sep="_")
       if(input$Norm1=="Oui"){ # Construction du graphique pour le choix normé
-        tend_1 <- scale(Tableau$C1$tendance) # Normalisation de la tendance pour le capteur 1
-        tend_2 <- scale(Tableau$C2$tendance) # Normalisation de la tendance pour le capteur 2
+        # Normalisation de la tendance pour le capteur 1
+        tend_1 <- Tableau %>% 
+          .$C1 %>%
+          .$tendance
+          scale()
+        # Normalisation de la tendance pour le capteur 2  
+        tend_2 <- Tableau %>% 
+          .$C2 %>%
+          .$tendance
+        scale() 
         X <- c(Date,Date)
         Y <- c(tend_1,tend_2)
         Capteur <- c(rep(cap1,length(tend_1)),rep(cap2,length(tend_1)))
@@ -1135,8 +1238,12 @@ shinyServer(function(session,input, output) {
             axis.ticks.y = element_blank())
       }
       if(input$Norm1=="Non"){ # Construction du graphique pour le choix non normé
-        tend_1 <- Tableau$C1$tendance # Récupération de la tendance de la courbe 1
-        tend_2 <- Tableau$C2$tendance # Récupération de la tendance de la courbe 2
+        tend_1 <- Tableau %>%
+          .$C1 %>%
+          .$tendance # Récupération de la tendance de la courbe 1
+        tend_2 <- Tableau %>%
+          .$C2 %>%
+          .$tendance # Récupération de la tendance de la courbe 2
         X <- c(Date,Date)
         Y <- c(tend_1,tend_2)
         Capteur <- c(rep(cap1,length(tend_1)),rep(cap2,length(tend_1)))
@@ -1217,8 +1324,16 @@ shinyServer(function(session,input, output) {
       cap1 <- paste(input$capteur1,input$sens1,sep="_")
       cap2 <- paste(input$capteur2,input$sens2,sep="_")
       if(input$Norm1=="Oui"){# Construction du graphique pour le choix normé
-        bruit_1 <- scale(Tableau$C1$bruit) # Normalisation du bruit pour le capteur 1
-        bruit_2 <- scale(Tableau$C2$bruit) # Normalisation du bruit pour le capteur 2
+        # Normalisation du bruit pour le capteur 1
+        bruit_1 <- Tableau %>% 
+          .$C1 %>% 
+          .$bruit %>%
+          scale() 
+        # Normalisation du bruit pour le capteur 2
+        bruit_2 <- Tableau %>% 
+          .$C2 %>% 
+          .$bruit %>% 
+          scale()
         X <- c(Date,Date)
         Y <- c(bruit_1,bruit_2)
         Capteur <- c(rep(cap1,length(bruit_1)),rep(cap2,length(bruit_2)))
@@ -1231,8 +1346,14 @@ shinyServer(function(session,input, output) {
             axis.ticks.y = element_blank())
       }
       if(input$Norm1=="Non"){ # Construction du graphique pour le choix non normé
-        bruit_1 <- Tableau$C1$bruit # Récupération du bruit de la courbe 1
-        bruit_2 <- Tableau$C2$bruit # Récupération du bruit de la courbe 2
+        # Récupération du bruit de la courbe 1
+        bruit_1 <- Tableau %>% 
+          .$C1 %>%
+          .$bruit 
+        # Récupération du bruit de la courbe 2
+        bruit_2 <- Tableau %>%
+          .$C2 %>%
+          .$bruit 
         X <- c(Date,Date)
         Y <- c(bruit_1,bruit_2)
         Capteur <- c(rep(cap1,length(bruit_1)),rep(cap2,length(bruit_2)))
@@ -1252,9 +1373,16 @@ shinyServer(function(session,input, output) {
     isolate({
       # Récupération des données traitées
       Tableau <- Compar_tabl2()
-      bruit_1 <- scale(Tableau$C1$bruit)# Normalisation du bruit pour le capteur 1
-      bruit_2 <- scale(Tableau$C2$bruit)# Normalisation du bruit pour le capteur 2
-      correl <- round(cor(bruit_1,bruit_2,use = "na.or.complete"),3) # Coefficient de correlation de Pearson 
+      # Récupération du bruit de la courbe 1
+      bruit_1 <- Tableau %>% 
+        .$C1 %>%
+        .$bruit 
+      # Récupération du bruit de la courbe 2
+      bruit_2 <- Tableau %>%
+        .$C2 %>%
+        .$bruit 
+      # Coefficient de correlation de Pearson 
+      correl <- round(cor(bruit_1,bruit_2,use = "na.or.complete"),3) 
       
       ligne1 <- paste("Coefficient de correlation :",correl) # Fabrication du texte pour l'affichage
       if(correl>0.5){
@@ -1278,8 +1406,16 @@ shinyServer(function(session,input, output) {
     isolate({
       # Récupération des données traitées
       Tableau <- Compar_tabl2()
-      bruit_1 <- na.trim(scale(Tableau$C1$bruit))# Normalisation du bruit pour le capteur 1
-      bruit_2 <- na.trim(scale(Tableau$C2$bruit))# Normalisation du bruit pour le capteur 2
+      # Récupération du bruit de la courbe 1
+      bruit_1 <- Tableau %>% 
+        .$C1 %>%
+        .$bruit %>%
+        na.trim() #suppression des NA aux extrémités
+      # Récupération du bruit de la courbe 2
+      bruit_2 <- Tableau %>%
+        .$C2 %>%
+        .$bruit %>%
+        na.trim() #suppression des NA aux extrémités
       # Test de synchronicité des pics (on récupère la pvalue calculé à partir de 100 tirage)
       picVal <- peaks(bruit_1,bruit_2,nrands = 100)$pval 
       pic <- round(peaks(bruit_1,bruit_2)$obs,3)
@@ -1417,46 +1553,51 @@ shinyServer(function(session,input, output) {
   
   #Permet d'afficher le nombre de valeurs moyen si possible
   output$OutBox11 = renderUI(
-    if (is.null(liste_capteur())|mode(tableau_P1())=="character"|mode(tableau_P2())=="character"|mode(tableau_P3())=="character"|length(input$SM1)==0|length(input$SM2)==0|length(input$SM3)==0){return()
+    if(is.null(donnee_import()$donnee)){}else{
+    if (mode(tableau_P1())=="character"|mode(tableau_P2())=="character"|mode(tableau_P3())=="character"|length(input$SM1)==0|length(input$SM2)==0|length(input$SM3)==0){return()
     }else{
       htmlOutput("NbLignes")
-    }
+    }}
   )
   
   #Permet d'afficher le bouton d'import si toutes les conditions sont bonnes
   output$OutBox9 = renderUI(
-    if (is.null(liste_capteur())|mode(tableau_P1())=="character"|mode(tableau_P2())=="character"|mode(tableau_P3())=="character"|length(input$SM1)==0|length(input$SM2)==0|length(input$SM3)==0){return()
+    if(is.null(donnee_import()$donnee)){}else{
+    if (mode(tableau_P1())=="character"|mode(tableau_P2())=="character"|mode(tableau_P3())=="character"|length(input$SM1)==0|length(input$SM2)==0|length(input$SM3)==0){return()
     }else{
       downloadButton("downloadData", "Import des données")
-    }
+    }}
   )
   
   #Permet d'afficher le titre du Premier graphique si tout va bien
   output$OutBox13 = renderUI(
-    if (is.null(liste_capteur())|mode(tableau_P1())=="character"|mode(tableau_P2())=="character"|length(input$SM1)==0|length(input$SM2)==0){return()
+    if(is.null(donnee_import()$donnee)){}else{
+    if (mode(tableau_P1())=="character"|mode(tableau_P2())=="character"|length(input$SM1)==0|length(input$SM2)==0){return()
     }else{
       h2("Comparaison avec la première période")
-    }
+    }}
   )
   
   #Permet d'afficher le titre du Second graphique si tout va bien
   output$OutBox14 = renderUI(
-    if (is.null(liste_capteur())|mode(tableau_P1())=="character"|mode(tableau_P3())=="character"|length(input$SM1)==0|length(input$SM3)==0){return()
+    if(is.null(donnee_import()$donnee)){}else{
+    if (mode(tableau_P1())=="character"|mode(tableau_P3())=="character"|length(input$SM1)==0|length(input$SM3)==0){return()
     }else{
       h2("Comparaison avec la seconde période")
-    }
+    }}
   )
   
   # Affiche la remarque pour l'interprttaion des test si tout va bien.
   output$OutBox15 = renderUI(
-    if (is.null(liste_capteur())|mode(tableau_P1())=="character"|mode(tableau_P3())=="character"|length(input$SM1)==0|length(input$SM3)==0){return()
+    if(is.null(donnee_import()$donnee)){}else{
+    if (mode(tableau_P1())=="character"|mode(tableau_P3())=="character"|length(input$SM1)==0|length(input$SM3)==0){return()
     }else{
       HTML("(*) Remarques relatives à la significativité de la différence de comportement : <br/>
       Pour chaque créneau horaire, la couleur indique s'il y a un comportement différent des usagers entre les deux périodes.
       Si le résultat est <i>Significatif</i>, c'est qu'il y a très probablement un changement de comportement entre les deux périodes (pour l'heure concernée).
       Si le résultat est <i>Entre deux</i>, alors il est possible qu'il y ait une différence.
       Si le résultat est <i>Non-significatif</i>, on ne peut pas dire qu'il y ait une différence.")
-    }
+    }}
   )
   
 ################################################################################################################# 

@@ -94,11 +94,10 @@ shinyUI(
                    checkboxGroupInput(
                      "mobilite",
                      "Choix du type de mobilité",
-                     selected = "car",
+                     selected = c("car","heavy"),
                      choiceNames = c("VL","PL","Piéton","Vélo"),
                      choiceValues = c("car","heavy","pedestrian","bike")
                    ),
-                   actionButton("mise_a_j", "Mettre à jour"),
                    h2(span(style="color:#006bb6","Periode de référence")),
                    dateRangeInput("daterange1", "Période",
                                   start  = "2021-01-01",
@@ -152,7 +151,8 @@ shinyUI(
                      choiceNames = c("lundi","mardi","mercredi","jeudi","vendredi","samedi","dimanche"),
                      choiceValues = 1:7,
                      inline = TRUE
-                   )
+                   ),
+                   actionButton("mise_a_j", "Mettre à jour")
                  )), 
                  column(width = 9,
                         uiOutput("OutBox13"),
