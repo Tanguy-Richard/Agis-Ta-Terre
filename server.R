@@ -622,8 +622,8 @@ shinyServer(function(session,input, output) {
           tt <- DE.test(Donnee[,i]) # Darling-Erdos
           x <- Donnee[tt$estimate,1]
           res2 <- c(res2,x)
-          moyenne <- mean(res2)
-        }
+        } 
+        moyenne <- mean(res2)
       }else{
         D <- c("plus de 40km/h","plus de 30km/h","plus de 20km/h","plus de 10km/h")
         ind <- which(D==input$vit)
