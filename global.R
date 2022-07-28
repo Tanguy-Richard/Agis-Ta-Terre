@@ -239,8 +239,11 @@ desaisonalite=function(donnees,col,model){
   tab_temp <- as_tibble(cbind(donnees$date,sanstendance))
   colnames(tab_temp) <- c("date","ma")
   # Determination de l'impact du jour de la semaine
-  jours_semaines <- tab_temp %>% group_by(wday(date)) %>% mutate(moyday=mean(ma,na.rm = TRUE))
-  jours_semaines <- jours_semaines %>% filter (! duplicated(wday(date))) %>% arrange(wday(date))
+  jours_semaines <- tab_temp %>% 
+    group_by(wday(date)) %>% 
+    mutate(moyday=mean(ma,na.rm = TRUE)) %>% 
+    filter (! duplicated(wday(date))) %>% 
+    arrange(wday(date))
   colnames(jours_semaines) <- c("date","ma","Jsem","moyday")
   # Séparation des données sans tendance en un cycle hebdomadaire et un signal restant (bruit) 
   decycle <- NULL
@@ -249,7 +252,8 @@ desaisonalite=function(donnees,col,model){
     # Récupération du jour de la semaine
     jour <- wday(tab_temp$date[i])
     # Récupération de la valeur du jour de la semaine
-    val_jour <- jours_semaines[jours_semaines$Jsem==jour,]$moyday
+    val_jour <- jours_semaines %>% filter(Jsem==jour) %>%
+      .$moyday
     # Séparaison selon le modèle choisie
     cycle <- c(cycle,val_jour)
     if(model=="mult"){

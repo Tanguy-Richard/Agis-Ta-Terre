@@ -311,7 +311,7 @@ shinyServer(function(session,input, output) {
           donnees <- donnees %>% filter(wday(date) %in% input$SM2)
           
           if(length(donnees$date)==0){ # Test pour savoir si la sélection est vide
-            donnees <- "Pas de données pour la selection de la période de référence"
+            donnees <- "Pas de données pour la selection de la période 1"
           }else{ # Sélection de vacances
             if(input$Vacance2=="Non"){  
               donnees <- selection_date(donnees,Vacances$interval) %>%
@@ -322,7 +322,7 @@ shinyServer(function(session,input, output) {
                 .$donnees_correspondantes
             }
             if(length(donnees$date)==0){  # Test pour savoir si la sélection est vide
-              donnees <- "Pas de données pour la selection de la période de référence"
+              donnees <- "Pas de données pour la selection de la période 1"
             }else{ # Sélection de jours fériés
               if(input$JF2=="Non"){
                 donnees <- selection_date2(donnees,JoursFeries) %>% 
@@ -333,7 +333,7 @@ shinyServer(function(session,input, output) {
                   .$donnees_correspondantes
               }
               if(length(donnees$date)==0){  # Test pour savoir si la sélection est vide
-                donnees <- "Pas de données pour la selection de la période de référence"
+                donnees <- "Pas de données pour la selection de la période 1"
               }
             }
           }}
@@ -364,7 +364,7 @@ shinyServer(function(session,input, output) {
           donnees <- donnees %>% filter(wday(date) %in% input$SM3)
           
           if(length(donnees$date)==0){ # Test pour savoir si la sélection est vide
-            donnees <- "Pas de données pour la selection de la période de référence"
+            donnees <- "Pas de données pour la selection de la période 2"
           }else{ # Sélection de vacances
             if(input$Vacance3=="Non"){  
               donnees <- selection_date(donnees,Vacances$interval) %>%
@@ -375,7 +375,7 @@ shinyServer(function(session,input, output) {
                 .$donnees_correspondantes
             }
             if(length(donnees$date)==0){  # Test pour savoir si la sélection est vide
-              donnees <- "Pas de données pour la selection de la période de référence"
+              donnees <- "Pas de données pour la selection de la période 2"
             }else{ # Sélection de jours fériés
               if(input$JF3=="Non"){
                 donnees <- selection_date2(donnees,JoursFeries) %>% 
@@ -386,7 +386,7 @@ shinyServer(function(session,input, output) {
                   .$donnees_correspondantes
               }
               if(length(donnees$date)==0){  # Test pour savoir si la sélection est vide
-                donnees <- "Pas de données pour la selection de la période de référence"
+                donnees <- "Pas de données pour la selection de la période 2"
               }
             }
           }}
